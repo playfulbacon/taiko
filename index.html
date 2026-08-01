@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#16161e">
+<title>Taiko Says</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: #16161e;
+    color: #eee;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #app {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  /* ---- top: beat visualization ---- */
+  #viz {
+    padding: 14px 10px 6px;
+    text-align: center;
+  }
+  #phaselabel {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    color: #888;
+    transition: color 0.15s;
+  }
+  #phaselabel.listen { color: #ff5a5a; }
+  #phaselabel.repeat { color: #4cd964; }
+  #cells {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 4px;
+  }
+  .cell {
+    flex: 1;
+    max-width: 84px;
+    height: 52px;
+    border-radius: 12px;
+    background: #23232e;
+    border: 2px solid transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: border-color 0.08s, background 0.08s;
+  }
+  .cell.playhead { border-color: #ffd23f; background: #2b2b38; }
+  .dot {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    opacity: 0.35;
+    transition: opacity 0.06s, transform 0.06s, box-shadow 0.06s;
+  }
+  .dot.don { background: #ff5a5a; }
+  .dot.ka { background: transparent; border: 4px solid #4fc3f7; }
+  .dot.sub { width: 16px; height: 16px; }
+  .dot.sub.ka { border-width: 3px; }
+  .dot.played { opacity: 1; transform: scale(1.15); }
+  .dot.hit { opacity: 1; transform: scale(1.15); box-shadow: 0 0 10px 2px #4cd96488; }
+  .restmark {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #3a3a48;
+  }
+
+  /* ---- middle: score ---- */
+  #scorewrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+  }
+  #score {
+    font-size: min(24vh, 34vw);
+    font-weight: 800;
+    line-height: 1;
+    color: #fff;
+    text-shadow: 0 0 40px #ffffff22;
+    transition: transform 0.1s;
+  }
+  #score.pop { transform: scale(1.15); color: #4cd964; }
+  #status {
+    margin-top: 8px;
+    font-size: 17px;
+    color: #999;
+    min-height: 24px;
+  }
+
+  /* ---- bottom: drum ---- */
+  #drumzone {
+    height: 42%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #rimhint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 0 22px 26px;
+    color: #4fc3f766;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    pointer-events: none;
+  }
+  #drum {
+    width: min(58vw, 30vh);
+    height: min(58vw, 30vh);
+    border-radius: 50%;
+    background: radial-gradient(circle at 38% 32%, #3a3a4a, #23232e 70%);
+    border: 7px solid #4fc3f7;
+    box-shadow: 0 0 0 4px #16161e, 0 0 24px #00000088;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: transform 0.05s;
+    pointer-events: none;
+  }
+  #drum .label {
+    color: #ff5a5a99;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    pointer-events: none;
+  }
+  #drum.flash-don { background: radial-gradient(circle at 50% 45%, #ff5a5a, #a02020 75%); transform: scale(0.96); }
+  #drum.flash-ka { border-color: #bfeaff; box-shadow: 0 0 0 4px #16161e, 0 0 34px #4fc3f7cc; transform: scale(1.02); }
+  #drum.beatpulse { transform: scale(1.03); }
+
+  /* ---- overlays ---- */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: #16161ef2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 24px;
+    z-index: 10;
+    text-align: center;
+  }
+  .overlay.hidden { display: none; }
+  h1 {
+    font-size: 44px;
+    font-weight: 800;
+  }
+  h1 .red { color: #ff5a5a; }
+  h1 .blue { color: #4fc3f7; }
+  .subtitle { color: #999; font-size: 15px; line-height: 1.5; max-width: 320px; }
+  .subtitle b.don { color: #ff5a5a; }
+  .subtitle b.ka { color: #4fc3f7; }
+  .lenlabel { font-size: 13px; letter-spacing: 2px; color: #888; text-transform: uppercase; margin-top: 8px; }
+  #lenpicker { display: flex; gap: 10px; }
+  .lenbtn {
+    width: 64px; height: 52px;
+    border-radius: 14px;
+    border: 2px solid #3a3a48;
+    background: #23232e;
+    color: #ccc;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .lenbtn.selected { border-color: #ffd23f; color: #ffd23f; background: #2b2b38; }
+  .bigbtn {
+    margin-top: 10px;
+    padding: 18px 64px;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    border: none;
+    border-radius: 18px;
+    background: #ff5a5a;
+    color: #fff;
+    box-shadow: 0 6px 0 #a02020;
+  }
+  .bigbtn:active { transform: translateY(3px); box-shadow: 0 3px 0 #a02020; }
+  #highscores {
+    margin-top: 6px;
+    min-height: 90px;
+  }
+  #highscores h3 { font-size: 13px; letter-spacing: 2px; color: #888; text-transform: uppercase; margin-bottom: 8px; }
+  #hslist { list-style: none; font-size: 17px; color: #ddd; line-height: 1.6; }
+  #hslist .medal { margin-right: 8px; }
+  #hslist .empty { color: #666; font-style: italic; }
+
+  #gameover h2 { font-size: 26px; color: #ff5a5a; }
+  #finalscore { font-size: 96px; font-weight: 800; line-height: 1; }
+  #gameoverdetail { color: #999; font-size: 16px; }
+  #newbest { color: #ffd23f; font-weight: 700; font-size: 18px; min-height: 24px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="viz">
+    <div id="phaselabel">&nbsp;</div>
+    <div id="cells"></div>
+  </div>
+  <div id="scorewrap">
+    <div id="score">0</div>
+    <div id="status"></div>
+  </div>
+  <div id="drumzone">
+    <div id="rimhint"><span>RIM</span><span>RIM</span></div>
+    <div id="drum"><span class="label">DON</span></div>
+  </div>
+</div>
+
+<div id="title" class="overlay">
+  <h1><span class="red">Taiko</span> <span class="blue">Says</span></h1>
+  <div class="subtitle">
+    Listen to the rhythm, then repeat it on the very next beat.<br>
+    Tap <b class="don">inside the drum</b> for don &bull;
+    tap <b class="ka">outside</b> for rim.<br>
+    One miss and it's over!
+  </div>
+  <div class="lenlabel">Phrase length (beats)</div>
+  <div id="lenpicker">
+    <button class="lenbtn" data-len="2">2</button>
+    <button class="lenbtn selected" data-len="4">4</button>
+    <button class="lenbtn" data-len="8">8</button>
+  </div>
+  <div id="highscores">
+    <h3>High scores</h3>
+    <ol id="hslist"></ol>
+  </div>
+  <button id="startbtn" class="bigbtn">PLAY</button>
+</div>
+
+<div id="gameover" class="overlay hidden">
+  <h2>Game Over</h2>
+  <div id="gameoverdetail"></div>
+  <div id="finalscore">0</div>
+  <div class="subtitle">rhythms repeated</div>
+  <div id="newbest"></div>
+  <button id="continuebtn" class="bigbtn">CONTINUE</button>
+</div>
+
+<script>
+'use strict';
+
+/* ================= Tunables ================= */
+
+// Forgiveness: how far off a tap may be from the true beat and still count,
+// as a fraction of one beat on EACH side. 0.45 means nearly half a beat of
+// slop either way. Lower = stricter.
+const FORGIVENESS = 0.45;
+
+const BASE_BPM = 96;        // starting tempo
+const BPM_STEP = 5;         // tempo increase...
+const BPM_EVERY = 3;        // ...every this many successful phrases
+const MAX_BPM = 152;
+
+const COUNT_IN_BEATS = 4;   // metronome count-in before the first phrase
+
+/* ================= Traditional pattern bank =================
+   Seed phrases drawn from common festival-taiko (matsuri) figures.
+   D = don (center), K = ka (rim), R = rest. One symbol per beat.
+   Later rounds add generated phrases with doko (don-don eighth) cells. */
+const PATTERN_BANK = {
+  2: ['D K', 'D D', 'K D', 'D R'],
+  4: [
+    'D D K R',   // don don ka —
+    'D K D K',   // don ka don ka
+    'D D D K',   // don don don ka
+    'D R D K',   // don — don ka
+    'D K K D',   // don ka ka don
+    'D D K K',   // don don ka ka
+  ],
+};
+PATTERN_BANK[8] = PATTERN_BANK[4].flatMap(a =>
+  PATTERN_BANK[4].slice(0, 3).map(b => a + ' ' + b)).slice(0, 8);
+
+/* ================= State ================= */
+
+let audio = null;           // AudioContext
+let running = false;
+let phraseLen = parseInt(localStorage.getItem('taikosays_len') || '4', 10);
+let score = 0;
+let scheduledNodes = [];    // audio nodes to cancel on game over
+let timerId = null;         // scheduler interval
+let rafId = null;
+
+// The measure currently/next being played, and judging state:
+let pendingMeasure = null;  // next measure to schedule {kind, start, beatInterval, pattern}
+let callMeasure = null;     // active call measure (for viz playback)
+let response = null;        // active response {start, end, w, events:[{time,type,el,matched}]}
+let currentPattern = null;
+
+/* ================= DOM ================= */
+const $ = id => document.getElementById(id);
+const scoreEl = $('score'), statusEl = $('status'), cellsEl = $('cells');
+const phaseEl = $('phaselabel'), drumEl = $('drum'), appEl = $('app');
+
+/* ================= Audio synthesis ================= */
+
+function ensureAudio() {
+  if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+  if (audio.state === 'suspended') audio.resume();
+}
+
+function track(node) { scheduledNodes.push(node); return node; }
+
+// Deep taiko "don": pitched membrane thump.
+function playDon(t) {
+  const osc = track(audio.createOscillator());
+  const gain = audio.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(150, t);
+  osc.frequency.exponentialRampToValueAtTime(55, t + 0.18);
+  gain.gain.setValueAtTime(0.9, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+  osc.connect(gain).connect(audio.destination);
+  osc.start(t); osc.stop(t + 0.3);
+}
+
+// Rim "ka": short bright click (filtered noise burst).
+function playKa(t) {
+  const len = 0.06;
+  const buf = audio.createBuffer(1, Math.ceil(audio.sampleRate * len), audio.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+  const src = track(audio.createBufferSource());
+  src.buffer = buf;
+  const bp = audio.createBiquadFilter();
+  bp.type = 'bandpass'; bp.frequency.value = 2400; bp.Q.value = 1.2;
+  const gain = audio.createGain();
+  gain.gain.setValueAtTime(0.8, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + len);
+  src.connect(bp).connect(gain).connect(audio.destination);
+  src.start(t); src.stop(t + len);
+}
+
+// Metronome tick (accent = first beat of a measure).
+function playTick(t, accent) {
+  const osc = track(audio.createOscillator());
+  const gain = audio.createGain();
+  osc.type = 'square';
+  osc.frequency.value = accent ? 1400 : 1000;
+  gain.gain.setValueAtTime(accent ? 0.12 : 0.06, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+  osc.connect(gain).connect(audio.destination);
+  osc.start(t); osc.stop(t + 0.04);
+}
+
+function playFailSound() {
+  const t = audio.currentTime;
+  const osc = audio.createOscillator();
+  const gain = audio.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(220, t);
+  osc.frequency.exponentialRampToValueAtTime(70, t + 0.5);
+  gain.gain.setValueAtTime(0.25, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+  osc.connect(gain).connect(audio.destination);
+  osc.start(t); osc.stop(t + 0.6);
+}
+
+/* ================= Pattern generation ================= */
+// A pattern is an array of events {beat: float, type: 'don'|'ka'}.
+
+function bankPattern(len) {
+  const bank = PATTERN_BANK[len];
+  const str = bank[Math.floor(Math.random() * bank.length)];
+  const events = [];
+  str.split(' ').forEach((sym, i) => {
+    if (sym === 'D') events.push({ beat: i, type: 'don' });
+    if (sym === 'K') events.push({ beat: i, type: 'ka' });
+  });
+  return events;
+}
+
+function generatedPattern(len, difficulty) {
+  // Weighted per-beat cells; harder rounds unlock eighth-note doko/kara cells.
+  const cells = [
+    { w: 3.0, ev: [{ s: 0, t: 'don' }] },
+    { w: 2.5, ev: [{ s: 0, t: 'ka' }] },
+    { w: len > 2 ? 1.4 : 0.6, ev: [] },                                // rest
+    { w: difficulty >= 8 ? 1.6 : 0, ev: [{ s: 0, t: 'don' }, { s: 0.5, t: 'don' }] },  // doko
+    { w: difficulty >= 14 ? 1.2 : 0, ev: [{ s: 0, t: 'don' }, { s: 0.5, t: 'ka' }] },  // doka
+    { w: difficulty >= 14 ? 0.8 : 0, ev: [{ s: 0, t: 'ka' }, { s: 0.5, t: 'ka' }] },   // kaka
+  ];
+  const total = cells.reduce((a, c) => a + c.w, 0);
+  const events = [];
+  for (let b = 0; b < len; b++) {
+    let r = Math.random() * total;
+    let cell = cells[0];
+    for (const c of cells) { r -= c.w; if (r <= 0) { cell = c; break; } }
+    cell.ev.forEach(e => events.push({ beat: b + e.s, type: e.t }));
+  }
+  // Always anchor the phrase with a hit on beat 1.
+  if (!events.some(e => e.beat === 0)) events.unshift({ beat: 0, type: 'don' });
+  // Never serve an all-but-empty phrase.
+  if (events.length < 2) events.push({ beat: len - 1, type: 'ka' });
+  return events.sort((a, b) => a.beat - b.beat);
+}
+
+function makePattern(len, score) {
+  if (score < 4 && PATTERN_BANK[len]) return bankPattern(len);
+  return generatedPattern(len, score);
+}
+
+function currentBpm() {
+  return Math.min(MAX_BPM, BASE_BPM + Math.floor(score / BPM_EVERY) * BPM_STEP);
+}
+
+/* ================= Visualization ================= */
+
+function renderPattern(pattern, len) {
+  cellsEl.innerHTML = '';
+  for (let b = 0; b < len; b++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.dataset.beat = b;
+    const evs = pattern.filter(e => Math.floor(e.beat) === b);
+    if (evs.length === 0) {
+      const r = document.createElement('div');
+      r.className = 'restmark';
+      cell.appendChild(r);
+    } else {
+      evs.forEach(e => {
+        const d = document.createElement('div');
+        d.className = 'dot ' + e.type + (evs.length > 1 ? ' sub' : '');
+        e.el = d;
+        cell.appendChild(d);
+      });
+    }
+    cellsEl.appendChild(cell);
+  }
+}
+
+function setPhase(label) {
+  phaseEl.textContent = label === 'listen' ? 'LISTEN' : label === 'repeat' ? 'YOUR TURN' : ' ';
+  phaseEl.className = label === 'listen' ? 'listen' : label === 'repeat' ? 'repeat' : '';
+  statusEl.textContent = label === 'listen' ? 'Listen…' : label === 'repeat' ? 'Repeat!' : statusEl.textContent;
+}
+
+function highlightBeat(idx) {
+  [...cellsEl.children].forEach((c, i) => c.classList.toggle('playhead', i === idx));
+}
+
+function flashDrum(type) {
+  drumEl.classList.remove('flash-don', 'flash-ka', 'beatpulse');
+  void drumEl.offsetWidth;
+  drumEl.classList.add(type === 'don' ? 'flash-don' : 'flash-ka');
+  setTimeout(() => drumEl.classList.remove('flash-don', 'flash-ka'), 110);
+}
+
+/* ================= Game loop ================= */
+
+function startGame() {
+  ensureAudio();
+  running = true;
+  score = 0;
+  scoreEl.textContent = '0';
+  scheduledNodes = [];
+  response = null;
+  callMeasure = null;
+  statusEl.textContent = 'Get ready…';
+  setPhase('');
+  cellsEl.innerHTML = '';
+
+  const bi = 60 / currentBpm();
+  const start = audio.currentTime + 0.3;
+  // Count-in measure, then the first call.
+  for (let b = 0; b < COUNT_IN_BEATS; b++) playTick(start + b * bi, b === 0);
+  pendingMeasure = { kind: 'call', start: start + COUNT_IN_BEATS * bi };
+
+  timerId = setInterval(schedulerTick, 25);
+  rafId = requestAnimationFrame(frame);
+}
+
+// Schedules each measure's audio just before it begins, and chains the next one.
+function schedulerTick() {
+  if (!running || !pendingMeasure) return;
+  const now = audio.currentTime;
+  if (now + 0.25 < pendingMeasure.start) return;
+
+  const m = pendingMeasure;
+  const bi = 60 / currentBpm();
+
+  // Keep the cancel list from growing without bound on long runs.
+  if (scheduledNodes.length > 300) scheduledNodes.splice(0, 200);
+
+  if (m.kind === 'call') {
+    const pattern = makePattern(phraseLen, score);
+    currentPattern = pattern;
+    // Audio is scheduled now, but the viz swaps in at the measure start (frame()),
+    // so the previous phrase stays on screen while the player finishes it.
+    callMeasure = { start: m.start, beatInterval: bi, pattern, rendered: false };
+    for (let b = 0; b < phraseLen; b++) playTick(m.start + b * bi, b === 0);
+    pattern.forEach(e => {
+      const t = m.start + e.beat * bi;
+      (e.type === 'don' ? playDon : playKa)(t);
+    });
+    pendingMeasure = { kind: 'response', start: m.start + phraseLen * bi, beatInterval: bi };
+  } else {
+    // Response measure: metronome only; the player supplies the drums.
+    for (let b = 0; b < phraseLen; b++) playTick(m.start + b * bi, b === 0);
+    const w = FORGIVENESS * bi;
+    response = {
+      start: m.start,
+      end: m.start + phraseLen * bi,
+      w,
+      events: currentPattern.map(e => ({
+        time: m.start + e.beat * bi,
+        type: e.type,
+        el: e.el,
+        matched: false,
+      })),
+    };
+    pendingMeasure = { kind: 'call', start: m.start + phraseLen * bi };
+  }
+}
+
+// Per-frame: playhead, call-playback flashes, miss detection, phrase completion.
+function frame() {
+  if (!running) return;
+  const now = audio.currentTime;
+
+  const inResponse = response && now >= response.start && now < response.end;
+  const inCall = callMeasure && now >= callMeasure.start && !inResponse &&
+                 now < callMeasure.start + phraseLen * callMeasure.beatInterval;
+
+  if (callMeasure && !callMeasure.rendered && now >= callMeasure.start - 0.05) {
+    renderPattern(callMeasure.pattern, phraseLen);
+    callMeasure.rendered = true;
+  }
+
+  if (inCall) {
+    setPhase('listen');
+    const beat = (now - callMeasure.start) / callMeasure.beatInterval;
+    highlightBeat(Math.floor(beat));
+    callMeasure.pattern.forEach(e => {
+      if (e.el && !e.el.classList.contains('played') && now >= callMeasure.start + e.beat * callMeasure.beatInterval) {
+        e.el.classList.add('played');
+        flashDrum(e.type);
+      }
+    });
+  } else if (inResponse) {
+    setPhase('repeat');
+    highlightBeat(Math.floor((now - response.start) / ((response.end - response.start) / phraseLen)));
+  } else {
+    highlightBeat(-1);
+  }
+
+  if (response) {
+    // A hit whose window has fully passed and was never matched = miss.
+    for (const e of response.events) {
+      if (!e.matched && now > e.time + response.w) {
+        return fail('Missed a hit');
+      }
+    }
+    // Phrase survived: all events matched and the trailing window has passed.
+    if (now > response.end + response.w) {
+      response = null;
+      score++;
+      scoreEl.textContent = score;
+      scoreEl.classList.add('pop');
+      setTimeout(() => scoreEl.classList.remove('pop'), 120);
+      // Clear the green hit-glow for the next phrase (pattern re-renders on next call).
+    }
+  }
+
+  rafId = requestAnimationFrame(frame);
+}
+
+/* ================= Input & judging ================= */
+
+appEl.addEventListener('pointerdown', ev => {
+  if (!running) return;
+  ev.preventDefault();
+  ensureAudio();
+  const r = drumEl.getBoundingClientRect();
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const dist = Math.hypot(ev.clientX - cx, ev.clientY - cy);
+  const type = dist <= r.width / 2 ? 'don' : 'ka';
+
+  const t = audio.currentTime;
+  (type === 'don' ? playDon : playKa)(t);
+  flashDrum(type);
+  if (navigator.vibrate) navigator.vibrate(type === 'don' ? 15 : 8);
+  judge(type, t);
+});
+
+function judge(type, t) {
+  if (!response) return;                          // listening phase: free play
+  if (t < response.start - response.w) return;    // too early to be an attempt
+  if (t > response.end + response.w) return;
+  // Phrase already fully matched: extra taps bleed into the next "listen"
+  // phase (whose window overlaps ours), so treat them as free play too.
+  if (response.events.every(e => e.matched)) return;
+
+  // Prefer the nearest unmatched event of the SAME type inside the window.
+  let best = null, bestDist = Infinity;
+  let anyInWindow = false;
+  for (const e of response.events) {
+    if (e.matched) continue;
+    const d = Math.abs(t - e.time);
+    if (d <= response.w) {
+      anyInWindow = true;
+      if (e.type === type && d < bestDist) { best = e; bestDist = d; }
+    }
+  }
+  if (best) {
+    best.matched = true;
+    if (best.el) best.el.classList.add('hit');
+  } else if (anyInWindow) {
+    fail('Wrong drum');
+  } else {
+    fail('Extra hit');
+  }
+}
+
+/* ================= Game over & high scores ================= */
+
+function loadScores() {
+  try { return JSON.parse(localStorage.getItem('taikosays_scores') || '{}'); }
+  catch { return {}; }
+}
+
+// Records the score and returns true if it beat the previous best for this length.
+function saveScore(len, s) {
+  if (s <= 0) return false;
+  const all = loadScores();
+  const list = all[len] || [];
+  const prevBest = list[0] || 0;
+  list.push(s);
+  list.sort((a, b) => b - a);
+  all[len] = list.slice(0, 5);
+  localStorage.setItem('taikosays_scores', JSON.stringify(all));
+  return s > prevBest;
+}
+
+function fail(reason) {
+  running = false;
+  clearInterval(timerId);
+  cancelAnimationFrame(rafId);
+  // Silence everything already queued.
+  scheduledNodes.forEach(n => { try { n.stop(); } catch (e) {} });
+  scheduledNodes = [];
+  playFailSound();
+  highlightBeat(-1);
+  setPhase('');
+  statusEl.textContent = '';
+
+  const isBest = saveScore(phraseLen, score);
+  $('gameoverdetail').textContent = reason + '!';
+  $('finalscore').textContent = score;
+  $('newbest').textContent = isBest && score > 0 ? '★ New high score! ★' : '';
+  setTimeout(() => $('gameover').classList.remove('hidden'), 500);
+}
+
+/* ================= Title screen ================= */
+
+function renderHighScores() {
+  const list = (loadScores()[phraseLen] || []);
+  const el = $('hslist');
+  el.innerHTML = '';
+  if (list.length === 0) {
+    el.innerHTML = '<li class="empty">No scores yet — be the first!</li>';
+    return;
+  }
+  const medals = ['\u{1F947}', '\u{1F948}', '\u{1F949}', '•', '•'];
+  list.forEach((s, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = '<span class="medal">' + medals[i] + '</span>' + s;
+    el.appendChild(li);
+  });
+}
+
+document.querySelectorAll('.lenbtn').forEach(btn => {
+  if (parseInt(btn.dataset.len, 10) === phraseLen) {
+    document.querySelectorAll('.lenbtn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+  }
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.lenbtn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    phraseLen = parseInt(btn.dataset.len, 10);
+    localStorage.setItem('taikosays_len', phraseLen);
+    renderHighScores();
+  });
+});
+
+$('startbtn').addEventListener('click', () => {
+  ensureAudio();
+  $('title').classList.add('hidden');
+  startGame();
+});
+
+$('continuebtn').addEventListener('click', () => {
+  $('gameover').classList.add('hidden');
+  renderHighScores();
+  $('title').classList.remove('hidden');
+});
+
+renderHighScores();
+</script>
+</body>
+</html>
