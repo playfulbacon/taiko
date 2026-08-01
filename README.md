@@ -15,8 +15,14 @@ number of phrases you successfully repeat.
   (long phrases wrap into rows of 8); your correct hits light up green.
 - **Score** is the big number in the middle of the screen.
 - **Title screen** lets you pick the phrase length (2 / 4 / 8 / 16 beats,
-  default 4) and a starting tempo (80–128 BPM), and shows the top-5 high
-  scores for that length (stored locally). The tempo rises with every point.
+  default 4), a starting tempo (80–128 BPM), the beat division (4th, 8th, or
+  16th notes — each beat cell in the visualization shows one slot per
+  subdivision so you can see exactly where off-beat hits land), and whether
+  the metronome ticks during play. It also shows the top-5 high scores for
+  the chosen length (stored locally). The tempo rises with every point.
+- **Practice mode** plays the same way but never ends: a miss just forfeits
+  that phrase with a gentle buzz and play rolls on. A quit button in the
+  corner returns to the title screen. Practice runs don't record high scores.
 - Early rounds use classic festival-taiko (matsuri) figures with traditional
   kuchi-shoga sticking like *don ko ka* and *don ka ko ra*; as your score
   climbs the tempo rises and eighth-note *doko* (right-left) cells appear.

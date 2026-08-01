@@ -64,19 +64,29 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    padding: 0 2px;
     transition: border-color 0.08s, background 0.08s;
   }
   .cell.playhead { border-color: #ffd23f; background: #2b2b38; }
   .cell.goodcell { border-color: #4cd964; }
   .cell.playhead.goodcell { border-color: #4cd964; }
+  /* Each cell is a mini-timeline: one slot per subdivision, empty slots show a tick. */
+  .slot {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tick { width: 4px; height: 4px; border-radius: 50%; background: #3a3a48; }
   .dot {
-    width: 22px;
-    height: 22px;
     border-radius: 50%;
     opacity: 0.35;
     transition: opacity 0.06s, transform 0.06s;
   }
+  .cell.slots1 .dot { width: 22px; height: 22px; }
+  .cell.slots2 .dot { width: 16px; height: 16px; }
+  .cell.slots4 .dot { width: 11px; height: 11px; }
   /* The lit half of a note shows which hand: left-lit = left hit, right-lit = right hit. */
   .dot.don.sideR { background: conic-gradient(from 0deg, #ff5a5a 0 50%, #6b2424 0); }
   .dot.don.sideL { background: conic-gradient(from 180deg, #ff5a5a 0 50%, #6b2424 0); }
@@ -86,19 +96,15 @@
   }
   .dot.ka.sideR { background: conic-gradient(from 0deg, #4fc3f7 0 50%, #1d4557 0); }
   .dot.ka.sideL { background: conic-gradient(from 180deg, #4fc3f7 0 50%, #1d4557 0); }
-  .dot.sub { width: 16px; height: 16px; }
   .dot.played { opacity: 1; transform: scale(1.15); }
   .dot.hit { opacity: 1; transform: scale(1.2); }
-  .restmark {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: #3a3a48;
-  }
   /* Long phrases: smaller cells, 8 per row. */
   #cells.dense .cellrow { gap: 4px; }
-  #cells.dense .cell { height: 42px; gap: 3px; border-radius: 9px; }
-  #cells.dense .dot { width: 15px; height: 15px; }
-  #cells.dense .dot.sub { width: 12px; height: 12px; }
-  #cells.dense .restmark { width: 6px; height: 6px; }
+  #cells.dense .cell { height: 42px; border-radius: 9px; padding: 0 1px; }
+  #cells.dense .cell.slots1 .dot { width: 15px; height: 15px; }
+  #cells.dense .cell.slots2 .dot { width: 12px; height: 12px; }
+  #cells.dense .cell.slots4 .dot { width: 8px; height: 8px; }
+  #cells.dense .tick { width: 3px; height: 3px; }
 
   /* ---- middle: score ---- */
   #scorewrap {
@@ -150,8 +156,8 @@
     width: min(58vw, 30vh);
     height: min(58vw, 30vh);
     border-radius: 50%;
-    background: radial-gradient(circle at 38% 32%, #3a3a4a, #23232e 70%);
-    border: 7px solid #4fc3f7;
+    background: radial-gradient(circle at 38% 32%, #d05555, #8a2a2a 70%);
+    border: 13px solid #4fc3f7;
     box-shadow: 0 0 0 4px #16161e, 0 0 24px #00000088;
     overflow: hidden;
     position: relative;
@@ -165,14 +171,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #ff5a5a77;
+    color: #ffd9d977;
     font-size: 15px;
     font-weight: 800;
     letter-spacing: 1px;
   }
-  #halfL { left: 0; border-right: 1px dashed #ffffff2a; }
+  #halfL { left: 0; border-right: 1px dashed #ffffff33; }
   #halfR { right: 0; }
-  .dhalf.flash { background: radial-gradient(circle at 50% 50%, #ff5a5a, #a0202088 80%); color: #fff; }
+  .dhalf.flash { background: radial-gradient(circle at 50% 50%, #ffb0b0, #ff5a5acc 80%); color: #fff; }
   #drum.flash-ka { border-color: #bfeaff; transform: scale(1.02); }
   #drum.beatpulse { transform: scale(1.03); }
   .rimglow {
@@ -192,16 +198,21 @@
     position: fixed;
     inset: 0;
     background: #16161ef2;
+    overflow-y: auto;
+    touch-action: pan-y;
+    z-index: 10;
+  }
+  .overlay.hidden { display: none; }
+  .panel {
+    min-height: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 18px;
+    gap: 14px;
     padding: 24px;
-    z-index: 10;
     text-align: center;
   }
-  .overlay.hidden { display: none; }
   h1 {
     font-size: 44px;
     font-weight: 800;
@@ -212,8 +223,20 @@
   .subtitle b.don { color: #ff5a5a; }
   .subtitle b.ka { color: #4fc3f7; }
   .lenlabel { font-size: 13px; letter-spacing: 2px; color: #888; text-transform: uppercase; margin-top: 8px; }
-  #lenpicker, #tempopicker { display: flex; gap: 10px; }
+  #lenpicker, #tempopicker, #subpicker { display: flex; gap: 10px; }
   .tempobtn { font-size: 16px; height: 46px; }
+  .subbtn { font-size: 15px; height: 46px; width: 76px; }
+  .togglebtn {
+    margin-top: 8px;
+    padding: 12px 22px;
+    border-radius: 14px;
+    border: 2px solid #3a3a48;
+    background: #23232e;
+    color: #888;
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .togglebtn.selected { border-color: #ffd23f; color: #ffd23f; background: #2b2b38; }
   .lenbtn {
     width: 64px; height: 52px;
     border-radius: 14px;
@@ -226,7 +249,7 @@
   .lenbtn.selected { border-color: #ffd23f; color: #ffd23f; background: #2b2b38; }
   .bigbtn {
     margin-top: 10px;
-    padding: 18px 64px;
+    padding: 18px 40px;
     font-size: 22px;
     font-weight: 800;
     letter-spacing: 1px;
@@ -237,6 +260,32 @@
     box-shadow: 0 6px 0 #a02020;
   }
   .bigbtn:active { transform: translateY(3px); box-shadow: 0 3px 0 #a02020; }
+  #startrow { display: flex; gap: 12px; align-items: center; }
+  .bigbtn.secondary {
+    background: #23232e;
+    color: #4fc3f7;
+    border: 2px solid #4fc3f7;
+    box-shadow: 0 6px 0 #101018;
+    padding: 16px 28px;
+    font-size: 18px;
+  }
+  .bigbtn.secondary:active { box-shadow: 0 3px 0 #101018; }
+  #quitbtn {
+    position: absolute;
+    top: calc(env(safe-area-inset-top) + 10px);
+    right: 12px;
+    z-index: 5;
+    padding: 8px 14px;
+    border-radius: 12px;
+    border: 2px solid #3a3a48;
+    background: #23232ecc;
+    color: #999;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  #quitbtn.hidden { display: none; }
+  #status.warn { color: #ff5a5a; font-weight: 700; }
   #highscores {
     margin-top: 6px;
     min-height: 90px;
@@ -254,6 +303,7 @@
 </head>
 <body>
 <div id="app">
+  <button id="quitbtn" class="hidden">&#10005; QUIT</button>
   <div id="viz">
     <div id="phaselabel">&nbsp;</div>
     <div id="cells"></div>
@@ -274,6 +324,7 @@
 </div>
 
 <div id="title" class="overlay">
+  <div class="panel">
   <h1><span class="red">Taiko</span> <span class="blue">Says</span></h1>
   <div class="subtitle">
     Listen to the rhythm, then repeat it on the very next beat.<br>
@@ -296,20 +347,33 @@
     <button class="lenbtn tempobtn" data-bpm="112">112</button>
     <button class="lenbtn tempobtn" data-bpm="128">128</button>
   </div>
+  <div class="lenlabel">Beat division</div>
+  <div id="subpicker">
+    <button class="lenbtn subbtn" data-sub="4">4ths</button>
+    <button class="lenbtn subbtn" data-sub="8">8ths</button>
+    <button class="lenbtn subbtn" data-sub="16">16ths</button>
+  </div>
+  <button id="metrobtn" class="togglebtn">Metronome: ON</button>
   <div id="highscores">
     <h3>High scores</h3>
     <ol id="hslist"></ol>
   </div>
-  <button id="startbtn" class="bigbtn">PLAY</button>
+  <div id="startrow">
+    <button id="startbtn" class="bigbtn">PLAY</button>
+    <button id="practicebtn" class="bigbtn secondary">PRACTICE</button>
+  </div>
+  </div>
 </div>
 
 <div id="gameover" class="overlay hidden">
+  <div class="panel">
   <h2>Game Over</h2>
   <div id="gameoverdetail"></div>
   <div id="finalscore">0</div>
   <div class="subtitle">rhythms repeated</div>
   <div id="newbest"></div>
   <button id="continuebtn" class="bigbtn">CONTINUE</button>
+  </div>
 </div>
 
 <script>
@@ -361,6 +425,14 @@ let running = false;
 let phraseLen = parseInt(localStorage.getItem('taikosays_len') || '4', 10);
 let startBpm = parseInt(localStorage.getItem('taikosays_bpm') || DEFAULT_BPM, 10);
 if (!TEMPO_CHOICES.includes(startBpm)) startBpm = DEFAULT_BPM;
+let subdivNote = parseInt(localStorage.getItem('taikosays_subdiv') || '8', 10);
+if (![4, 8, 16].includes(subdivNote)) subdivNote = 8;
+let metroOn = localStorage.getItem('taikosays_metro') !== '0';
+let practiceMode = false;
+let practiceMsgTimer = null;
+
+// Slots per beat for the selected note division (4ths→1, 8ths→2, 16ths→4).
+const subdivSlots = () => subdivNote / 4;
 let score = 0;
 let scheduledNodes = [];    // audio nodes to cancel on game over
 let timerId = null;         // scheduler interval
@@ -446,6 +518,20 @@ function playFailSound() {
   osc.start(t); osc.stop(t + 0.6);
 }
 
+// Gentle version for practice-mode misses.
+function playSoftFail() {
+  const t = audio.currentTime;
+  const osc = audio.createOscillator();
+  const gain = audio.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(180, t);
+  osc.frequency.exponentialRampToValueAtTime(90, t + 0.18);
+  gain.gain.setValueAtTime(0.1, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+  osc.connect(gain).connect(audio.destination);
+  osc.start(t); osc.stop(t + 0.22);
+}
+
 /* ================= Pattern generation ================= */
 // A pattern is an array of events {beat: float, type: 'don'|'ka'}.
 
@@ -459,37 +545,56 @@ function bankPattern(len) {
   return events;
 }
 
-function generatedPattern(len, difficulty) {
-  // Weighted per-beat cells; harder rounds unlock eighth-note doko/kara cells.
-  // Eighth-note cells use natural R→L sticking (doko = don-ko, kara = ka-ra).
+function generatedPattern(len, difficulty, slots) {
+  // Weighted per-beat cells. The chosen beat division gates which cells exist;
+  // difficulty grows their weight and unlocks trickier figures. All multi-hit
+  // cells use natural R→L sticking (doko = don-ko, kara = ka-ra).
+  const e = (s, t) => ({ s, t });
   const cells = [
-    { w: 1.7, ev: [{ s: 0, t: 'donR' }] },
-    { w: 1.3, ev: [{ s: 0, t: 'donL' }] },
-    { w: 1.4, ev: [{ s: 0, t: 'kaR' }] },
-    { w: 1.1, ev: [{ s: 0, t: 'kaL' }] },
+    { w: 1.7, ev: [e(0, 'donR')] },
+    { w: 1.3, ev: [e(0, 'donL')] },
+    { w: 1.4, ev: [e(0, 'kaR')] },
+    { w: 1.1, ev: [e(0, 'kaL')] },
     { w: len > 2 ? 1.4 : 0.6, ev: [] },                                // rest
-    { w: difficulty >= 8 ? 1.6 : 0, ev: [{ s: 0, t: 'donR' }, { s: 0.5, t: 'donL' }] },  // doko
-    { w: difficulty >= 14 ? 1.2 : 0, ev: [{ s: 0, t: 'donR' }, { s: 0.5, t: 'kaL' }] },  // doka
-    { w: difficulty >= 14 ? 0.8 : 0, ev: [{ s: 0, t: 'kaR' }, { s: 0.5, t: 'kaL' }] },   // kara
   ];
+  if (slots >= 2) {
+    const w8 = 0.8 + Math.min(1.2, difficulty * 0.15);
+    cells.push({ w: w8, ev: [e(0, 'donR'), e(0.5, 'donL')] });         // doko
+    if (difficulty >= 6) {
+      cells.push({ w: w8 * 0.7, ev: [e(0, 'donR'), e(0.5, 'kaL')] });  // doka
+      cells.push({ w: w8 * 0.5, ev: [e(0, 'kaR'), e(0.5, 'kaL')] });   // kara
+    }
+  }
+  if (slots >= 4) {
+    const w16 = 0.5 + Math.min(1.0, difficulty * 0.12);
+    cells.push({ w: w16, ev: [e(0, 'donR'), e(0.25, 'donL'), e(0.5, 'donR')] });        // doko-don
+    cells.push({ w: w16 * 0.8, ev: [e(0, 'donR'), e(0.5, 'donR'), e(0.75, 'donL')] });  // don-doko
+    if (difficulty >= 6)
+      cells.push({ w: w16 * 0.6, ev: [e(0, 'donR'), e(0.25, 'donL'), e(0.5, 'donR'), e(0.75, 'donL')] });  // dokodoko
+    if (difficulty >= 10)
+      cells.push({ w: w16 * 0.5, ev: [e(0, 'kaR'), e(0.25, 'kaL'), e(0.5, 'kaR')] });   // kara-ka
+  }
   const total = cells.reduce((a, c) => a + c.w, 0);
   const events = [];
   for (let b = 0; b < len; b++) {
     let r = Math.random() * total;
     let cell = cells[0];
     for (const c of cells) { r -= c.w; if (r <= 0) { cell = c; break; } }
-    cell.ev.forEach(e => events.push({ beat: b + e.s, type: e.t }));
+    cell.ev.forEach(x => events.push({ beat: b + x.s, type: x.t }));
   }
   // Always anchor the phrase with a hit on beat 1.
-  if (!events.some(e => e.beat === 0)) events.unshift({ beat: 0, type: 'donR' });
+  if (!events.some(ev => ev.beat === 0)) events.unshift({ beat: 0, type: 'donR' });
   // Never serve an all-but-empty phrase.
   if (events.length < 2) events.push({ beat: len - 1, type: 'kaR' });
   return events.sort((a, b) => a.beat - b.beat);
 }
 
 function makePattern(len, score) {
-  if (score < 4 && PATTERN_BANK[len]) return bankPattern(len);
-  return generatedPattern(len, score);
+  const slots = subdivSlots();
+  // Finer divisions were chosen on purpose, so leave the simple bank sooner.
+  const bankRounds = slots > 1 ? 2 : 4;
+  if (score < bankRounds && PATTERN_BANK[len]) return bankPattern(len);
+  return generatedPattern(len, score, slots);
 }
 
 function currentBpm() {
@@ -512,21 +617,25 @@ function renderPattern(pattern, len) {
       row.className = 'cellrow';
       cellsEl.appendChild(row);
     }
+    const slots = subdivSlots();
     const cell = document.createElement('div');
-    cell.className = 'cell';
-    const evs = pattern.filter(e => Math.floor(e.beat) === b);
-    if (evs.length === 0) {
-      const r = document.createElement('div');
-      r.className = 'restmark';
-      cell.appendChild(r);
-    } else {
-      evs.forEach(e => {
+    cell.className = 'cell slots' + slots;
+    for (let s = 0; s < slots; s++) {
+      const slot = document.createElement('div');
+      slot.className = 'slot';
+      const e = pattern.find(ev =>
+        Math.floor(ev.beat) === b && Math.round((ev.beat % 1) * slots) === s);
+      if (e) {
         const d = document.createElement('div');
-        d.className = 'dot ' + famOf(e.type) + ' side' + sideOf(e.type) +
-                      (evs.length > 1 ? ' sub' : '');
+        d.className = 'dot ' + famOf(e.type) + ' side' + sideOf(e.type);
         e.el = d;
-        cell.appendChild(d);
-      });
+        slot.appendChild(d);
+      } else {
+        const tick = document.createElement('div');
+        tick.className = 'tick';
+        slot.appendChild(tick);
+      }
+      cell.appendChild(slot);
     }
     row.appendChild(cell);
     cellEls.push(cell);
@@ -563,8 +672,10 @@ function flashDrum(type) {
 
 /* ================= Game loop ================= */
 
-function startGame() {
+function startGame(practice) {
   ensureAudio();
+  practiceMode = !!practice;
+  $('quitbtn').classList.toggle('hidden', !practiceMode);
   running = true;
   score = 0;
   scoreEl.textContent = '0';
@@ -604,13 +715,14 @@ function schedulerTick() {
     // Audio is scheduled now, but the viz swaps in at the measure start (frame()),
     // so the previous phrase stays on screen while the player finishes it.
     callMeasure = { start: m.start, beatInterval: bi, pattern, rendered: false };
-    for (let b = 0; b < phraseLen; b++) playTick(m.start + b * bi, b === 0);
+    if (metroOn) for (let b = 0; b < phraseLen; b++) playTick(m.start + b * bi, b === 0);
     pattern.forEach(e => playHit(e.type, m.start + e.beat * bi));
     pendingMeasure = { kind: 'response', start: m.start + phraseLen * bi, beatInterval: bi };
   } else {
-    // Response measure: metronome only; the player supplies the drums.
-    for (let b = 0; b < phraseLen; b++) playTick(m.start + b * bi, b === 0);
-    const w = FORGIVENESS * bi;
+    // Response measure: metronome only (if enabled); the player supplies the drums.
+    if (metroOn) for (let b = 0; b < phraseLen; b++) playTick(m.start + b * bi, b === 0);
+    // Fine divisions cap the window so it can't reach a neighboring slot.
+    const w = Math.min(FORGIVENESS, 0.95 / subdivSlots()) * bi;
     response = {
       start: m.start,
       end: m.start + phraseLen * bi,
@@ -659,13 +771,12 @@ function frame() {
 
   if (response) {
     // A hit whose window has fully passed and was never matched = miss.
-    for (const e of response.events) {
-      if (!e.matched && now > e.time + response.w) {
-        return fail('Missed a hit');
-      }
-    }
-    // Phrase survived: all events matched and the trailing window has passed.
-    if (now > response.end + response.w) {
+    const missed = response.events.some(e => !e.matched && now > e.time + response.w);
+    if (missed) {
+      handleMiss('Missed a hit');
+      if (!running) return;
+    } else if (now > response.end + response.w) {
+      // Phrase survived: all events matched and the trailing window has passed.
       response = null;
       score++;
       scoreEl.textContent = score;
@@ -721,14 +832,15 @@ function judge(type, t) {
     best.matched = true;
     if (best.el) {
       best.el.classList.add('hit');
-      best.el.parentElement.classList.add('goodcell');
+      const cell = best.el.closest('.cell');
+      if (cell) cell.classList.add('goodcell');
     }
   } else if (sameFamInWindow) {
-    fail('Wrong side');
+    handleMiss('Wrong side');
   } else if (anyInWindow) {
-    fail('Wrong drum');
+    handleMiss('Wrong drum');
   } else {
-    fail('Extra hit');
+    handleMiss('Extra hit');
   }
 }
 
@@ -752,23 +864,53 @@ function saveScore(len, s) {
   return s > prevBest;
 }
 
-function fail(reason) {
+// A miss ends the game — except in practice mode, where the phrase is simply
+// forfeited and play rolls on to the next call.
+function handleMiss(reason) {
+  if (practiceMode) {
+    response = null;
+    playSoftFail();
+    if (navigator.vibrate) navigator.vibrate(60);
+    statusEl.textContent = reason + ' — keep going!';
+    statusEl.classList.add('warn');
+    clearTimeout(practiceMsgTimer);
+    practiceMsgTimer = setTimeout(() => statusEl.classList.remove('warn'), 1200);
+  } else {
+    gameOver(reason);
+  }
+}
+
+function stopEverything() {
   running = false;
   clearInterval(timerId);
   cancelAnimationFrame(rafId);
   // Silence everything already queued.
   scheduledNodes.forEach(n => { try { n.stop(); } catch (e) {} });
   scheduledNodes = [];
-  playFailSound();
+  response = null;
+  callMeasure = null;
+  pendingMeasure = null;
   highlightBeat(-1);
   setPhase('');
   statusEl.textContent = '';
+  statusEl.classList.remove('warn');
+  $('quitbtn').classList.add('hidden');
+}
 
+function gameOver(reason) {
+  stopEverything();
+  playFailSound();
   const isBest = saveScore(phraseLen, score);
   $('gameoverdetail').textContent = reason + '!';
   $('finalscore').textContent = score;
   $('newbest').textContent = isBest && score > 0 ? '★ New high score! ★' : '';
   setTimeout(() => $('gameover').classList.remove('hidden'), 500);
+}
+
+function quitToTitle() {
+  stopEverything();
+  renderHighScores();
+  $('title').classList.remove('hidden');
 }
 
 /* ================= Title screen ================= */
@@ -810,11 +952,43 @@ document.querySelectorAll('#tempopicker .tempobtn').forEach(btn => {
   });
 });
 
+document.querySelectorAll('#subpicker .subbtn').forEach(btn => {
+  btn.classList.toggle('selected', parseInt(btn.dataset.sub, 10) === subdivNote);
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#subpicker .subbtn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    subdivNote = parseInt(btn.dataset.sub, 10);
+    localStorage.setItem('taikosays_subdiv', subdivNote);
+  });
+});
+
+const metrobtn = $('metrobtn');
+function renderMetroBtn() {
+  metrobtn.textContent = 'Metronome: ' + (metroOn ? 'ON' : 'OFF');
+  metrobtn.classList.toggle('selected', metroOn);
+}
+metrobtn.addEventListener('click', () => {
+  metroOn = !metroOn;
+  localStorage.setItem('taikosays_metro', metroOn ? '1' : '0');
+  renderMetroBtn();
+});
+renderMetroBtn();
+
 $('startbtn').addEventListener('click', () => {
   ensureAudio();
   $('title').classList.add('hidden');
-  startGame();
+  startGame(false);
 });
+
+$('practicebtn').addEventListener('click', () => {
+  ensureAudio();
+  $('title').classList.add('hidden');
+  startGame(true);
+});
+
+// The quit button must not register as a drum hit.
+$('quitbtn').addEventListener('pointerdown', ev => ev.stopPropagation());
+$('quitbtn').addEventListener('click', quitToTitle);
 
 $('continuebtn').addEventListener('click', () => {
   $('gameover').classList.add('hidden');
