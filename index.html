@@ -45,9 +45,14 @@
   #phaselabel.repeat { color: #4cd964; }
   #cells {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
     gap: 6px;
     padding: 0 4px;
+  }
+  .cellrow {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
   }
   .cell {
     flex: 1;
@@ -63,23 +68,37 @@
     transition: border-color 0.08s, background 0.08s;
   }
   .cell.playhead { border-color: #ffd23f; background: #2b2b38; }
+  .cell.goodcell { border-color: #4cd964; }
+  .cell.playhead.goodcell { border-color: #4cd964; }
   .dot {
     width: 22px;
     height: 22px;
     border-radius: 50%;
     opacity: 0.35;
-    transition: opacity 0.06s, transform 0.06s, box-shadow 0.06s;
+    transition: opacity 0.06s, transform 0.06s;
   }
-  .dot.don { background: #ff5a5a; }
-  .dot.ka { background: transparent; border: 4px solid #4fc3f7; }
+  /* The lit half of a note shows which hand: left-lit = left hit, right-lit = right hit. */
+  .dot.don.sideR { background: conic-gradient(from 0deg, #ff5a5a 0 50%, #6b2424 0); }
+  .dot.don.sideL { background: conic-gradient(from 180deg, #ff5a5a 0 50%, #6b2424 0); }
+  .dot.ka {
+    -webkit-mask: radial-gradient(closest-side, transparent 52%, #000 56%);
+    mask: radial-gradient(closest-side, transparent 52%, #000 56%);
+  }
+  .dot.ka.sideR { background: conic-gradient(from 0deg, #4fc3f7 0 50%, #1d4557 0); }
+  .dot.ka.sideL { background: conic-gradient(from 180deg, #4fc3f7 0 50%, #1d4557 0); }
   .dot.sub { width: 16px; height: 16px; }
-  .dot.sub.ka { border-width: 3px; }
   .dot.played { opacity: 1; transform: scale(1.15); }
-  .dot.hit { opacity: 1; transform: scale(1.15); box-shadow: 0 0 10px 2px #4cd96488; }
+  .dot.hit { opacity: 1; transform: scale(1.2); }
   .restmark {
     width: 8px; height: 8px; border-radius: 50%;
     background: #3a3a48;
   }
+  /* Long phrases: smaller cells, 8 per row. */
+  #cells.dense .cellrow { gap: 4px; }
+  #cells.dense .cell { height: 42px; gap: 3px; border-radius: 9px; }
+  #cells.dense .dot { width: 15px; height: 15px; }
+  #cells.dense .dot.sub { width: 12px; height: 12px; }
+  #cells.dense .restmark { width: 6px; height: 6px; }
 
   /* ---- middle: score ---- */
   #scorewrap {
@@ -134,23 +153,39 @@
     background: radial-gradient(circle at 38% 32%, #3a3a4a, #23232e 70%);
     border: 7px solid #4fc3f7;
     box-shadow: 0 0 0 4px #16161e, 0 0 24px #00000088;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    overflow: hidden;
     position: relative;
     transition: transform 0.05s;
     pointer-events: none;
   }
-  #drum .label {
-    color: #ff5a5a99;
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 2px;
+  .dhalf {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ff5a5a77;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 1px;
+  }
+  #halfL { left: 0; border-right: 1px dashed #ffffff2a; }
+  #halfR { right: 0; }
+  .dhalf.flash { background: radial-gradient(circle at 50% 50%, #ff5a5a, #a0202088 80%); color: #fff; }
+  #drum.flash-ka { border-color: #bfeaff; transform: scale(1.02); }
+  #drum.beatpulse { transform: scale(1.03); }
+  .rimglow {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 24%;
+    opacity: 0;
+    transition: opacity 0.18s;
     pointer-events: none;
   }
-  #drum.flash-don { background: radial-gradient(circle at 50% 45%, #ff5a5a, #a02020 75%); transform: scale(0.96); }
-  #drum.flash-ka { border-color: #bfeaff; box-shadow: 0 0 0 4px #16161e, 0 0 34px #4fc3f7cc; transform: scale(1.02); }
-  #drum.beatpulse { transform: scale(1.03); }
+  #rimL { left: 0; background: linear-gradient(90deg, #4fc3f7aa, transparent); }
+  #rimR { right: 0; background: linear-gradient(-90deg, #4fc3f7aa, transparent); }
+  .rimglow.flash { opacity: 1; transition: opacity 0.03s; }
 
   /* ---- overlays ---- */
   .overlay {
@@ -227,8 +262,13 @@
     <div id="status"></div>
   </div>
   <div id="drumzone">
-    <div id="rimhint"><span>RIM</span><span>RIM</span></div>
-    <div id="drum"><span class="label">DON</span></div>
+    <div id="rimhint"><span>L&nbsp;RIM</span><span>RIM&nbsp;R</span></div>
+    <div id="rimL" class="rimglow"></div>
+    <div id="rimR" class="rimglow"></div>
+    <div id="drum">
+      <div id="halfL" class="dhalf">L</div>
+      <div id="halfR" class="dhalf">R</div>
+    </div>
   </div>
 </div>
 
@@ -238,6 +278,7 @@
     Listen to the rhythm, then repeat it on the very next beat.<br>
     Tap <b class="don">inside the drum</b> for don &bull;
     tap <b class="ka">outside</b> for rim.<br>
+    Left and right count — a note's <b>lit half</b> shows which hand.<br>
     One miss and it's over!
   </div>
   <div class="lenlabel">Phrase length (beats)</div>
@@ -245,6 +286,7 @@
     <button class="lenbtn" data-len="2">2</button>
     <button class="lenbtn selected" data-len="4">4</button>
     <button class="lenbtn" data-len="8">8</button>
+    <button class="lenbtn" data-len="16">16</button>
   </div>
   <div id="highscores">
     <h3>High scores</h3>
@@ -280,22 +322,29 @@ const MAX_BPM = 152;
 const COUNT_IN_BEATS = 4;   // metronome count-in before the first phrase
 
 /* ================= Traditional pattern bank =================
-   Seed phrases drawn from common festival-taiko (matsuri) figures.
-   D = don (center), K = ka (rim), R = rest. One symbol per beat.
-   Later rounds add generated phrases with doko (don-don eighth) cells. */
+   Seed phrases drawn from common festival-taiko (matsuri) figures, using
+   kuchi-shoga sticking: right-hand bass "don" (D), left-hand bass "ko" (d),
+   right-hand rim "ka" (K), left-hand rim "ra" (k), rest (.). One symbol per
+   beat. Later rounds add generated phrases with eighth-note doko cells. */
 const PATTERN_BANK = {
-  2: ['D K', 'D D', 'K D', 'D R'],
+  2: ['D k', 'D d', 'K D', 'D .'],
   4: [
-    'D D K R',   // don don ka —
-    'D K D K',   // don ka don ka
-    'D D D K',   // don don don ka
-    'D R D K',   // don — don ka
-    'D K K D',   // don ka ka don
-    'D D K K',   // don don ka ka
+    'D d K .',   // don ko ka —
+    'D K d k',   // don ka ko ra
+    'D d D K',   // don ko don ka
+    'D . d K',   // don — ko ka
+    'D K k D',   // don ka ra don
+    'D D k k',   // don don ra ra
   ],
 };
 PATTERN_BANK[8] = PATTERN_BANK[4].flatMap(a =>
   PATTERN_BANK[4].slice(0, 3).map(b => a + ' ' + b)).slice(0, 8);
+PATTERN_BANK[16] = PATTERN_BANK[8].flatMap(a =>
+  PATTERN_BANK[8].slice(0, 2).map(b => a + ' ' + b)).slice(0, 8);
+
+const SYMBOLS = { D: 'donR', d: 'donL', K: 'kaR', k: 'kaL' };
+const famOf = t => t.slice(0, -1);   // 'don' | 'ka'
+const sideOf = t => t.slice(-1);     // 'L' | 'R'
 
 /* ================= State ================= */
 
@@ -327,21 +376,22 @@ function ensureAudio() {
 
 function track(node) { scheduledNodes.push(node); return node; }
 
-// Deep taiko "don": pitched membrane thump.
-function playDon(t) {
+// Deep taiko bass: right hand "don", left hand "ko" (a touch higher).
+function playDon(t, side) {
   const osc = track(audio.createOscillator());
   const gain = audio.createGain();
   osc.type = 'sine';
-  osc.frequency.setValueAtTime(150, t);
-  osc.frequency.exponentialRampToValueAtTime(55, t + 0.18);
+  const f0 = side === 'L' ? 170 : 150;
+  osc.frequency.setValueAtTime(f0, t);
+  osc.frequency.exponentialRampToValueAtTime(side === 'L' ? 64 : 55, t + 0.18);
   gain.gain.setValueAtTime(0.9, t);
   gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
   osc.connect(gain).connect(audio.destination);
   osc.start(t); osc.stop(t + 0.3);
 }
 
-// Rim "ka": short bright click (filtered noise burst).
-function playKa(t) {
+// Rim click: right hand "ka", left hand "ra" (brighter).
+function playKa(t, side) {
   const len = 0.06;
   const buf = audio.createBuffer(1, Math.ceil(audio.sampleRate * len), audio.sampleRate);
   const d = buf.getChannelData(0);
@@ -349,12 +399,16 @@ function playKa(t) {
   const src = track(audio.createBufferSource());
   src.buffer = buf;
   const bp = audio.createBiquadFilter();
-  bp.type = 'bandpass'; bp.frequency.value = 2400; bp.Q.value = 1.2;
+  bp.type = 'bandpass'; bp.frequency.value = side === 'L' ? 3000 : 2300; bp.Q.value = 1.2;
   const gain = audio.createGain();
   gain.gain.setValueAtTime(0.8, t);
   gain.gain.exponentialRampToValueAtTime(0.001, t + len);
   src.connect(bp).connect(gain).connect(audio.destination);
   src.start(t); src.stop(t + len);
+}
+
+function playHit(type, t) {
+  (famOf(type) === 'don' ? playDon : playKa)(t, sideOf(type));
 }
 
 // Metronome tick (accent = first beat of a measure).
@@ -390,21 +444,23 @@ function bankPattern(len) {
   const str = bank[Math.floor(Math.random() * bank.length)];
   const events = [];
   str.split(' ').forEach((sym, i) => {
-    if (sym === 'D') events.push({ beat: i, type: 'don' });
-    if (sym === 'K') events.push({ beat: i, type: 'ka' });
+    if (SYMBOLS[sym]) events.push({ beat: i, type: SYMBOLS[sym] });
   });
   return events;
 }
 
 function generatedPattern(len, difficulty) {
   // Weighted per-beat cells; harder rounds unlock eighth-note doko/kara cells.
+  // Eighth-note cells use natural R→L sticking (doko = don-ko, kara = ka-ra).
   const cells = [
-    { w: 3.0, ev: [{ s: 0, t: 'don' }] },
-    { w: 2.5, ev: [{ s: 0, t: 'ka' }] },
+    { w: 1.7, ev: [{ s: 0, t: 'donR' }] },
+    { w: 1.3, ev: [{ s: 0, t: 'donL' }] },
+    { w: 1.4, ev: [{ s: 0, t: 'kaR' }] },
+    { w: 1.1, ev: [{ s: 0, t: 'kaL' }] },
     { w: len > 2 ? 1.4 : 0.6, ev: [] },                                // rest
-    { w: difficulty >= 8 ? 1.6 : 0, ev: [{ s: 0, t: 'don' }, { s: 0.5, t: 'don' }] },  // doko
-    { w: difficulty >= 14 ? 1.2 : 0, ev: [{ s: 0, t: 'don' }, { s: 0.5, t: 'ka' }] },  // doka
-    { w: difficulty >= 14 ? 0.8 : 0, ev: [{ s: 0, t: 'ka' }, { s: 0.5, t: 'ka' }] },   // kaka
+    { w: difficulty >= 8 ? 1.6 : 0, ev: [{ s: 0, t: 'donR' }, { s: 0.5, t: 'donL' }] },  // doko
+    { w: difficulty >= 14 ? 1.2 : 0, ev: [{ s: 0, t: 'donR' }, { s: 0.5, t: 'kaL' }] },  // doka
+    { w: difficulty >= 14 ? 0.8 : 0, ev: [{ s: 0, t: 'kaR' }, { s: 0.5, t: 'kaL' }] },   // kara
   ];
   const total = cells.reduce((a, c) => a + c.w, 0);
   const events = [];
@@ -415,9 +471,9 @@ function generatedPattern(len, difficulty) {
     cell.ev.forEach(e => events.push({ beat: b + e.s, type: e.t }));
   }
   // Always anchor the phrase with a hit on beat 1.
-  if (!events.some(e => e.beat === 0)) events.unshift({ beat: 0, type: 'don' });
+  if (!events.some(e => e.beat === 0)) events.unshift({ beat: 0, type: 'donR' });
   // Never serve an all-but-empty phrase.
-  if (events.length < 2) events.push({ beat: len - 1, type: 'ka' });
+  if (events.length < 2) events.push({ beat: len - 1, type: 'kaR' });
   return events.sort((a, b) => a.beat - b.beat);
 }
 
@@ -432,12 +488,22 @@ function currentBpm() {
 
 /* ================= Visualization ================= */
 
+let cellEls = [];
+
 function renderPattern(pattern, len) {
   cellsEl.innerHTML = '';
+  cellsEl.classList.toggle('dense', len >= 8);
+  cellEls = [];
+  const perRow = Math.min(len, 8);
+  let row = null;
   for (let b = 0; b < len; b++) {
+    if (b % perRow === 0) {
+      row = document.createElement('div');
+      row.className = 'cellrow';
+      cellsEl.appendChild(row);
+    }
     const cell = document.createElement('div');
     cell.className = 'cell';
-    cell.dataset.beat = b;
     const evs = pattern.filter(e => Math.floor(e.beat) === b);
     if (evs.length === 0) {
       const r = document.createElement('div');
@@ -446,12 +512,14 @@ function renderPattern(pattern, len) {
     } else {
       evs.forEach(e => {
         const d = document.createElement('div');
-        d.className = 'dot ' + e.type + (evs.length > 1 ? ' sub' : '');
+        d.className = 'dot ' + famOf(e.type) + ' side' + sideOf(e.type) +
+                      (evs.length > 1 ? ' sub' : '');
         e.el = d;
         cell.appendChild(d);
       });
     }
-    cellsEl.appendChild(cell);
+    row.appendChild(cell);
+    cellEls.push(cell);
   }
 }
 
@@ -462,14 +530,25 @@ function setPhase(label) {
 }
 
 function highlightBeat(idx) {
-  [...cellsEl.children].forEach((c, i) => c.classList.toggle('playhead', i === idx));
+  cellEls.forEach((c, i) => c.classList.toggle('playhead', i === idx));
 }
 
 function flashDrum(type) {
-  drumEl.classList.remove('flash-don', 'flash-ka', 'beatpulse');
-  void drumEl.offsetWidth;
-  drumEl.classList.add(type === 'don' ? 'flash-don' : 'flash-ka');
-  setTimeout(() => drumEl.classList.remove('flash-don', 'flash-ka'), 110);
+  const side = sideOf(type);
+  if (famOf(type) === 'don') {
+    const half = $(side === 'L' ? 'halfL' : 'halfR');
+    half.classList.remove('flash');
+    void half.offsetWidth;
+    half.classList.add('flash');
+    setTimeout(() => half.classList.remove('flash'), 110);
+  } else {
+    const glow = $(side === 'L' ? 'rimL' : 'rimR');
+    glow.classList.remove('flash');
+    void glow.offsetWidth;
+    glow.classList.add('flash');
+    drumEl.classList.add('flash-ka');
+    setTimeout(() => { glow.classList.remove('flash'); drumEl.classList.remove('flash-ka'); }, 110);
+  }
 }
 
 /* ================= Game loop ================= */
@@ -485,6 +564,7 @@ function startGame() {
   statusEl.textContent = 'Get ready…';
   setPhase('');
   cellsEl.innerHTML = '';
+  cellEls = [];
 
   const bi = 60 / currentBpm();
   const start = audio.currentTime + 0.3;
@@ -515,10 +595,7 @@ function schedulerTick() {
     // so the previous phrase stays on screen while the player finishes it.
     callMeasure = { start: m.start, beatInterval: bi, pattern, rendered: false };
     for (let b = 0; b < phraseLen; b++) playTick(m.start + b * bi, b === 0);
-    pattern.forEach(e => {
-      const t = m.start + e.beat * bi;
-      (e.type === 'don' ? playDon : playKa)(t);
-    });
+    pattern.forEach(e => playHit(e.type, m.start + e.beat * bi));
     pendingMeasure = { kind: 'response', start: m.start + phraseLen * bi, beatInterval: bi };
   } else {
     // Response measure: metronome only; the player supplies the drums.
@@ -600,12 +677,13 @@ appEl.addEventListener('pointerdown', ev => {
   const r = drumEl.getBoundingClientRect();
   const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
   const dist = Math.hypot(ev.clientX - cx, ev.clientY - cy);
-  const type = dist <= r.width / 2 ? 'don' : 'ka';
+  const side = ev.clientX < cx ? 'L' : 'R';
+  const type = (dist <= r.width / 2 ? 'don' : 'ka') + side;
 
   const t = audio.currentTime;
-  (type === 'don' ? playDon : playKa)(t);
+  playHit(type, t);
   flashDrum(type);
-  if (navigator.vibrate) navigator.vibrate(type === 'don' ? 15 : 8);
+  if (navigator.vibrate) navigator.vibrate(famOf(type) === 'don' ? 15 : 8);
   judge(type, t);
 });
 
@@ -617,20 +695,26 @@ function judge(type, t) {
   // phase (whose window overlaps ours), so treat them as free play too.
   if (response.events.every(e => e.matched)) return;
 
-  // Prefer the nearest unmatched event of the SAME type inside the window.
+  // Prefer the nearest unmatched event of the exact same type (drum AND side).
   let best = null, bestDist = Infinity;
-  let anyInWindow = false;
+  let anyInWindow = false, sameFamInWindow = false;
   for (const e of response.events) {
     if (e.matched) continue;
     const d = Math.abs(t - e.time);
     if (d <= response.w) {
       anyInWindow = true;
+      if (famOf(e.type) === famOf(type)) sameFamInWindow = true;
       if (e.type === type && d < bestDist) { best = e; bestDist = d; }
     }
   }
   if (best) {
     best.matched = true;
-    if (best.el) best.el.classList.add('hit');
+    if (best.el) {
+      best.el.classList.add('hit');
+      best.el.parentElement.classList.add('goodcell');
+    }
+  } else if (sameFamInWindow) {
+    fail('Wrong side');
   } else if (anyInWindow) {
     fail('Wrong drum');
   } else {

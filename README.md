@@ -3,19 +3,22 @@
 A mobile-friendly rhythm game inspired by taiko drumming and Bop It.
 
 **How to play:** a rhythm plays (the "call"), then you must repeat it starting
-on the very next beat (the "response"). Tap **inside the drum circle** for the
-bass hit (*don*), tap **anywhere outside it** for the rim hit (*ka*). Miss a
-hit, hit the wrong drum, or add an extra hit and the game ends. Your score is
-the number of phrases you successfully repeat.
+on the very next beat (the "response"). The drum and rim are split into left
+and right halves: tap **inside the drum circle** for the bass hit (right-hand
+*don* / left-hand *ko*), tap **anywhere outside it** for the rim hit
+(right-hand *ka* / left-hand *ra*). Left and right count — each note in the
+visualization lights up on the half matching the hand. Miss a hit, hit the
+wrong drum or side, or add an extra hit and the game ends. Your score is the
+number of phrases you successfully repeat.
 
-- **Beat visualization** across the top shows the pattern and a moving playhead;
-  your correct hits light up green.
+- **Beat visualization** across the top shows the pattern and a moving playhead
+  (long phrases wrap into rows of 8); your correct hits light up green.
 - **Score** is the big number in the middle of the screen.
-- **Title screen** lets you pick the phrase length (2 / 4 / 8 beats, default 4)
-  and shows the top-5 high scores for that length (stored locally).
-- Early rounds use classic festival-taiko (matsuri) figures like
-  *don don ka* and *don ka don ka*; as your score climbs the tempo rises and
-  eighth-note *doko* cells appear.
+- **Title screen** lets you pick the phrase length (2 / 4 / 8 / 16 beats,
+  default 4) and shows the top-5 high scores for that length (stored locally).
+- Early rounds use classic festival-taiko (matsuri) figures with traditional
+  kuchi-shoga sticking like *don ko ka* and *don ka ko ra*; as your score
+  climbs the tempo rises and eighth-note *doko* (right-left) cells appear.
 
 ## Tweaking
 
@@ -28,7 +31,7 @@ script:
 | `BASE_BPM` | `96` | Starting tempo. |
 | `BPM_STEP` / `BPM_EVERY` | `5` / `3` | Tempo rises 5 BPM every 3 successful phrases. |
 | `MAX_BPM` | `152` | Tempo cap. |
-| `PATTERN_BANK` | — | The seed rhythm phrases (`D` = don, `K` = ka, `R` = rest). |
+| `PATTERN_BANK` | — | The seed rhythm phrases (`D` = right don, `d` = left ko, `K` = right ka, `k` = left ra, `.` = rest). |
 
 ## Publishing on GitHub Pages
 
