@@ -212,7 +212,8 @@
   .subtitle b.don { color: #ff5a5a; }
   .subtitle b.ka { color: #4fc3f7; }
   .lenlabel { font-size: 13px; letter-spacing: 2px; color: #888; text-transform: uppercase; margin-top: 8px; }
-  #lenpicker { display: flex; gap: 10px; }
+  #lenpicker, #tempopicker { display: flex; gap: 10px; }
+  .tempobtn { font-size: 16px; height: 46px; }
   .lenbtn {
     width: 64px; height: 52px;
     border-radius: 14px;
@@ -288,6 +289,13 @@
     <button class="lenbtn" data-len="8">8</button>
     <button class="lenbtn" data-len="16">16</button>
   </div>
+  <div class="lenlabel">Starting tempo (BPM)</div>
+  <div id="tempopicker">
+    <button class="lenbtn tempobtn" data-bpm="80">80</button>
+    <button class="lenbtn tempobtn" data-bpm="96">96</button>
+    <button class="lenbtn tempobtn" data-bpm="112">112</button>
+    <button class="lenbtn tempobtn" data-bpm="128">128</button>
+  </div>
   <div id="highscores">
     <h3>High scores</h3>
     <ol id="hslist"></ol>
@@ -314,10 +322,10 @@
 // slop either way. Lower = stricter.
 const FORGIVENESS = 0.45;
 
-const BASE_BPM = 96;        // starting tempo
-const BPM_STEP = 5;         // tempo increase...
-const BPM_EVERY = 3;        // ...every this many successful phrases
-const MAX_BPM = 152;
+const BPM_STEP = 2;         // tempo increase per successful phrase (per point)
+const MAX_BPM = 168;        // tempo cap
+const TEMPO_CHOICES = [80, 96, 112, 128];  // title-screen starting tempos
+const DEFAULT_BPM = 96;
 
 const COUNT_IN_BEATS = 4;   // metronome count-in before the first phrase
 
@@ -351,6 +359,8 @@ const sideOf = t => t.slice(-1);     // 'L' | 'R'
 let audio = null;           // AudioContext
 let running = false;
 let phraseLen = parseInt(localStorage.getItem('taikosays_len') || '4', 10);
+let startBpm = parseInt(localStorage.getItem('taikosays_bpm') || DEFAULT_BPM, 10);
+if (!TEMPO_CHOICES.includes(startBpm)) startBpm = DEFAULT_BPM;
 let score = 0;
 let scheduledNodes = [];    // audio nodes to cancel on game over
 let timerId = null;         // scheduler interval
@@ -483,7 +493,7 @@ function makePattern(len, score) {
 }
 
 function currentBpm() {
-  return Math.min(MAX_BPM, BASE_BPM + Math.floor(score / BPM_EVERY) * BPM_STEP);
+  return Math.min(MAX_BPM, startBpm + score * BPM_STEP);
 }
 
 /* ================= Visualization ================= */
@@ -779,17 +789,24 @@ function renderHighScores() {
   });
 }
 
-document.querySelectorAll('.lenbtn').forEach(btn => {
-  if (parseInt(btn.dataset.len, 10) === phraseLen) {
-    document.querySelectorAll('.lenbtn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-  }
+document.querySelectorAll('#lenpicker .lenbtn').forEach(btn => {
+  btn.classList.toggle('selected', parseInt(btn.dataset.len, 10) === phraseLen);
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.lenbtn').forEach(b => b.classList.remove('selected'));
+    document.querySelectorAll('#lenpicker .lenbtn').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
     phraseLen = parseInt(btn.dataset.len, 10);
     localStorage.setItem('taikosays_len', phraseLen);
     renderHighScores();
+  });
+});
+
+document.querySelectorAll('#tempopicker .tempobtn').forEach(btn => {
+  btn.classList.toggle('selected', parseInt(btn.dataset.bpm, 10) === startBpm);
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#tempopicker .tempobtn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    startBpm = parseInt(btn.dataset.bpm, 10);
+    localStorage.setItem('taikosays_bpm', startBpm);
   });
 });
 

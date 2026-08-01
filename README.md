@@ -15,7 +15,8 @@ number of phrases you successfully repeat.
   (long phrases wrap into rows of 8); your correct hits light up green.
 - **Score** is the big number in the middle of the screen.
 - **Title screen** lets you pick the phrase length (2 / 4 / 8 / 16 beats,
-  default 4) and shows the top-5 high scores for that length (stored locally).
+  default 4) and a starting tempo (80–128 BPM), and shows the top-5 high
+  scores for that length (stored locally). The tempo rises with every point.
 - Early rounds use classic festival-taiko (matsuri) figures with traditional
   kuchi-shoga sticking like *don ko ka* and *don ka ko ra*; as your score
   climbs the tempo rises and eighth-note *doko* (right-left) cells appear.
@@ -28,9 +29,9 @@ script:
 | Variable | Default | Meaning |
 |---|---|---|
 | `FORGIVENESS` | `0.45` | Timing slop allowed on each side of a beat, as a fraction of one beat. Lower = stricter. |
-| `BASE_BPM` | `96` | Starting tempo. |
-| `BPM_STEP` / `BPM_EVERY` | `5` / `3` | Tempo rises 5 BPM every 3 successful phrases. |
-| `MAX_BPM` | `152` | Tempo cap. |
+| `BPM_STEP` | `2` | Tempo rises this much with every point scored. |
+| `MAX_BPM` | `168` | Tempo cap. |
+| `TEMPO_CHOICES` / `DEFAULT_BPM` | `[80, 96, 112, 128]` / `96` | Starting tempos offered on the title screen. |
 | `PATTERN_BANK` | — | The seed rhythm phrases (`D` = right don, `d` = left ko, `K` = right ka, `k` = left ra, `.` = rest). |
 
 ## Publishing on GitHub Pages
