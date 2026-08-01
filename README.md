@@ -23,9 +23,15 @@ number of phrases you successfully repeat.
 - **Practice mode** plays the same way but never ends: a miss just forfeits
   that phrase with a gentle buzz and play rolls on. A quit button in the
   corner returns to the title screen. Practice runs don't record high scores.
-- Early rounds use classic festival-taiko (matsuri) figures with traditional
-  kuchi-shoga sticking like *don ko ka* and *don ka ko ra*; as your score
-  climbs the tempo rises and eighth-note *doko* (right-left) cells appear.
+- Phrases come from a curated library of 4-beat units written in kuchi-shoga
+  notation with traditional sticking (*don ko ka*, *doko doko ka*, …), each
+  assigned a **difficulty from 1 to 5**. The game serves phrases at your
+  current tier — which starts at 1 and rises every 3 points — and shows the
+  phrase's difficulty as stars under the beat display. Longer phrase lengths
+  chain library units; 2-beat games use unit halves.
+- **Dev mode** (button on the title screen) lists every phrase in the library
+  with a ▶ preview button and lets you reassign its difficulty (1–5). Choices
+  are saved locally as overrides; RESET restores the defaults.
 
 ## Tweaking
 
@@ -38,7 +44,8 @@ script:
 | `BPM_STEP` | `2` | Tempo rises this much with every point scored. |
 | `MAX_BPM` | `168` | Tempo cap. |
 | `TEMPO_CHOICES` / `DEFAULT_BPM` | `[80, 96, 112, 128]` / `96` | Starting tempos offered on the title screen. |
-| `PATTERN_BANK` | — | The seed rhythm phrases (`D` = right don, `d` = left ko, `K` = right ka, `k` = left ra, `.` = rest). |
+| `PHRASES` | — | The phrase library: 4-beat units with default difficulties. Notation: `D` = right don, `d` = left ko, `K` = right ka, `k` = left ra, `.` = rest; letters per beat token set its grid (1 = 4ths, 2 = 8ths, 4 = 16ths). |
+| `TIER_EVERY` | `3` | The difficulty tier rises every this many points. |
 
 ## Publishing on GitHub Pages
 

@@ -98,6 +98,13 @@
   .dot.ka.sideL { background: conic-gradient(from 180deg, #4fc3f7 0 50%, #1d4557 0); }
   .dot.played { opacity: 1; transform: scale(1.15); }
   .dot.hit { opacity: 1; transform: scale(1.2); }
+  #diffline {
+    margin-top: 8px;
+    font-size: 14px;
+    letter-spacing: 4px;
+    color: #ffd23f;
+    min-height: 18px;
+  }
   /* Long phrases: smaller cells, 8 per row. */
   #cells.dense .cellrow { gap: 4px; }
   #cells.dense .cell { height: 42px; border-radius: 9px; padding: 0 1px; }
@@ -295,6 +302,65 @@
   #hslist .medal { margin-right: 8px; }
   #hslist .empty { color: #666; font-style: italic; }
 
+  /* ---- dev mode ---- */
+  .devtitle { font-size: 26px; color: #ffd23f; }
+  #dev .subtitle code { color: #ddd; background: #23232e; padding: 1px 5px; border-radius: 5px; }
+  #phraselist {
+    width: 100%;
+    max-width: 430px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .devrow {
+    background: #23232e;
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .devtop { display: flex; align-items: center; gap: 10px; }
+  .devtop code {
+    flex: 1;
+    text-align: left;
+    font-size: 15px;
+    letter-spacing: 1px;
+    color: #eee;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .chip {
+    font-size: 11px;
+    font-weight: 700;
+    color: #4fc3f7;
+    border: 1px solid #4fc3f755;
+    padding: 2px 7px;
+    border-radius: 8px;
+    white-space: nowrap;
+  }
+  .prevbtn {
+    width: 34px; height: 34px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: none;
+    background: #2b2b38;
+    color: #ffd23f;
+    font-size: 13px;
+  }
+  .diffsel { display: flex; gap: 6px; }
+  .diffbtn {
+    flex: 1;
+    height: 34px;
+    border-radius: 9px;
+    border: 2px solid #3a3a48;
+    background: transparent;
+    color: #888;
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .diffbtn.selected { border-color: #ffd23f; color: #ffd23f; background: #2b2b38; }
+
   #gameover h2 { font-size: 26px; color: #ff5a5a; }
   #finalscore { font-size: 96px; font-weight: 800; line-height: 1; }
   #gameoverdetail { color: #999; font-size: 16px; }
@@ -307,6 +373,7 @@
   <div id="viz">
     <div id="phaselabel">&nbsp;</div>
     <div id="cells"></div>
+    <div id="diffline"></div>
   </div>
   <div id="scorewrap">
     <div id="score">0</div>
@@ -362,6 +429,26 @@
     <button id="startbtn" class="bigbtn">PLAY</button>
     <button id="practicebtn" class="bigbtn secondary">PRACTICE</button>
   </div>
+  <button id="devbtn" class="togglebtn">DEV MODE</button>
+  </div>
+</div>
+
+<div id="dev" class="overlay hidden">
+  <div class="panel">
+  <h2 class="devtitle">Dev Mode</h2>
+  <div class="subtitle">
+    Set which difficulty each phrase belongs to (1&ndash;5). The game serves
+    phrases at your current tier, which rises as you score.<br>
+    <code>D</code>&nbsp;don&nbsp;R &bull; <code>d</code>&nbsp;ko&nbsp;L &bull;
+    <code>K</code>&nbsp;ka&nbsp;R &bull; <code>k</code>&nbsp;ra&nbsp;L &bull;
+    <code>.</code>&nbsp;rest &mdash; letters per beat: 1&nbsp;=&nbsp;4ths,
+    2&nbsp;=&nbsp;8ths, 4&nbsp;=&nbsp;16ths
+  </div>
+  <div id="phraselist"></div>
+  <div id="startrow">
+    <button id="devreset" class="bigbtn secondary">RESET</button>
+    <button id="devback" class="bigbtn">BACK</button>
+  </div>
   </div>
 </div>
 
@@ -393,30 +480,60 @@ const DEFAULT_BPM = 96;
 
 const COUNT_IN_BEATS = 4;   // metronome count-in before the first phrase
 
-/* ================= Traditional pattern bank =================
-   Seed phrases drawn from common festival-taiko (matsuri) figures, using
-   kuchi-shoga sticking: right-hand bass "don" (D), left-hand bass "ko" (d),
-   right-hand rim "ka" (K), left-hand rim "ra" (k), rest (.). One symbol per
-   beat. Later rounds add generated phrases with eighth-note doko cells. */
-const PATTERN_BANK = {
-  2: ['D k', 'D d', 'K D', 'D .'],
-  4: [
-    'D d K .',   // don ko ka —
-    'D K d k',   // don ka ko ra
-    'D d D K',   // don ko don ka
-    'D . d K',   // don — ko ka
-    'D K k D',   // don ka ra don
-    'D D k k',   // don don ra ra
-  ],
-};
-PATTERN_BANK[8] = PATTERN_BANK[4].flatMap(a =>
-  PATTERN_BANK[4].slice(0, 3).map(b => a + ' ' + b)).slice(0, 8);
-PATTERN_BANK[16] = PATTERN_BANK[8].flatMap(a =>
-  PATTERN_BANK[8].slice(0, 2).map(b => a + ' ' + b)).slice(0, 8);
+/* ================= Phrase library =================
+   Every phrase the game can serve, as 4-beat units in kuchi-shoga notation:
+   right-hand bass "don" (D), left-hand bass "ko" (d), right-hand rim "ka"
+   (K), left-hand rim "ra" (k), rest (.). One token per beat; token length
+   sets its grid — 1 char = quarter, 2 chars = eighths, 4 chars = sixteenths.
+   `d` is the default difficulty (1–5); dev mode can override it per phrase.
+   Longer phrase lengths chain units; 2-beat games use unit halves. */
+const PHRASES = [
+  // Quarter-note phrases (playable at any beat division)
+  { p: 'D D K .', d: 1 },
+  { p: 'D K D K', d: 1 },
+  { p: 'D d K .', d: 1 },
+  { p: 'D . D K', d: 1 },
+  { p: 'D d D K', d: 2 },
+  { p: 'D K k D', d: 2 },
+  { p: 'D D k k', d: 2 },
+  { p: 'K D k D', d: 3 },
+  { p: 'D k d K', d: 3 },
+  // Eighth-note phrases
+  { p: 'Dd D K .', d: 2 },
+  { p: 'D Dd K K', d: 2 },
+  { p: 'Dd Dd K .', d: 3 },
+  { p: 'D Kk D .', d: 3 },
+  { p: 'Dd K Dd K', d: 4 },
+  { p: 'D dK d K', d: 4 },
+  { p: 'Kk Kk D .', d: 4 },
+  { p: 'Dd dD K k', d: 5 },
+  // Sixteenth-note phrases
+  { p: 'DdD. K DdD. K', d: 4 },
+  { p: 'D DdD. K .', d: 4 },
+  { p: 'DdDd K Kk .', d: 5 },
+  { p: 'D .dD. K K', d: 5 },
+  { p: 'DdDd DdDd K .', d: 5 },
+];
+const MAX_DIFF = 5;
+const TIER_EVERY = 3;   // difficulty tier rises every this many points
 
 const SYMBOLS = { D: 'donR', d: 'donL', K: 'kaR', k: 'kaL' };
 const famOf = t => t.slice(0, -1);   // 'don' | 'ka'
 const sideOf = t => t.slice(-1);     // 'L' | 'R'
+
+// Finest grid a phrase needs: 1, 2, or 4 slots per beat.
+const phraseSlots = str => Math.max(...str.split(' ').map(t => t.length));
+
+function parsePhrase(str) {
+  const events = [];
+  str.split(' ').forEach((tok, b) => {
+    const n = tok.length;
+    for (let i = 0; i < n; i++) {
+      if (SYMBOLS[tok[i]]) events.push({ beat: b + i / n, type: SYMBOLS[tok[i]] });
+    }
+  });
+  return events;
+}
 
 /* ================= State ================= */
 
@@ -448,6 +565,7 @@ let currentPattern = null;
 const $ = id => document.getElementById(id);
 const scoreEl = $('score'), statusEl = $('status'), cellsEl = $('cells');
 const phaseEl = $('phaselabel'), drumEl = $('drum'), appEl = $('app');
+const diffEl = $('diffline');
 
 /* ================= Audio synthesis ================= */
 
@@ -552,66 +670,64 @@ function playSoftFail() {
 /* ================= Pattern generation ================= */
 // A pattern is an array of events {beat: float, type: 'don'|'ka'}.
 
-function bankPattern(len) {
-  const bank = PATTERN_BANK[len];
-  const str = bank[Math.floor(Math.random() * bank.length)];
-  const events = [];
-  str.split(' ').forEach((sym, i) => {
-    if (SYMBOLS[sym]) events.push({ beat: i, type: SYMBOLS[sym] });
-  });
-  return events;
+/* Difficulty overrides set in dev mode, keyed by phrase notation. */
+let diffOverrides = {};
+try { diffOverrides = JSON.parse(localStorage.getItem('taikosays_diffs') || '{}'); }
+catch { diffOverrides = {}; }
+function saveDiffs() { localStorage.setItem('taikosays_diffs', JSON.stringify(diffOverrides)); }
+function effDiff(ph) {
+  const o = diffOverrides[ph.p];
+  return o >= 1 && o <= MAX_DIFF ? o : ph.d;
 }
 
-function generatedPattern(len, difficulty, slots) {
-  // Weighted per-beat cells. The chosen beat division gates which cells exist;
-  // difficulty grows their weight and unlocks trickier figures. All multi-hit
-  // cells use natural R→L sticking (doko = don-ko, kara = ka-ra).
-  const e = (s, t) => ({ s, t });
-  const cells = [
-    { w: 1.7, ev: [e(0, 'donR')] },
-    { w: 1.3, ev: [e(0, 'donL')] },
-    { w: 1.4, ev: [e(0, 'kaR')] },
-    { w: 1.1, ev: [e(0, 'kaL')] },
-    { w: len > 2 ? 1.4 : 0.6, ev: [] },                                // rest
-  ];
-  if (slots >= 2) {
-    const w8 = 0.8 + Math.min(1.2, difficulty * 0.15);
-    cells.push({ w: w8, ev: [e(0, 'donR'), e(0.5, 'donL')] });         // doko
-    if (difficulty >= 6) {
-      cells.push({ w: w8 * 0.7, ev: [e(0, 'donR'), e(0.5, 'kaL')] });  // doka
-      cells.push({ w: w8 * 0.5, ev: [e(0, 'kaR'), e(0.5, 'kaL')] });   // kara
+function currentTier(sc) { return Math.min(MAX_DIFF, 1 + Math.floor(sc / TIER_EVERY)); }
+
+// Pool of 4-beat units playable at the chosen division, with resolved difficulty.
+function phrasePool(slots) {
+  return PHRASES.filter(ph => phraseSlots(ph.p) <= slots)
+                .map(ph => ({ p: ph.p, diff: effDiff(ph) }));
+}
+
+// Pool of 2-beat halves for the shortest phrase length. A half inherits the
+// easiest difficulty among the phrases it appears in, and must start on a hit.
+function halfPool(slots) {
+  const map = new Map();
+  for (const item of phrasePool(slots)) {
+    const toks = item.p.split(' ');
+    for (const half of [toks.slice(0, 2), toks.slice(2, 4)]) {
+      const s = half.join(' ');
+      if (!SYMBOLS[s[0]]) continue;
+      map.set(s, Math.min(map.get(s) ?? Infinity, item.diff));
     }
   }
-  if (slots >= 4) {
-    const w16 = 0.5 + Math.min(1.0, difficulty * 0.12);
-    cells.push({ w: w16, ev: [e(0, 'donR'), e(0.25, 'donL'), e(0.5, 'donR')] });        // doko-don
-    cells.push({ w: w16 * 0.8, ev: [e(0, 'donR'), e(0.5, 'donR'), e(0.75, 'donL')] });  // don-doko
-    if (difficulty >= 6)
-      cells.push({ w: w16 * 0.6, ev: [e(0, 'donR'), e(0.25, 'donL'), e(0.5, 'donR'), e(0.75, 'donL')] });  // dokodoko
-    if (difficulty >= 10)
-      cells.push({ w: w16 * 0.5, ev: [e(0, 'kaR'), e(0.25, 'kaL'), e(0.5, 'kaR')] });   // kara-ka
-  }
-  const total = cells.reduce((a, c) => a + c.w, 0);
-  const events = [];
-  for (let b = 0; b < len; b++) {
-    let r = Math.random() * total;
-    let cell = cells[0];
-    for (const c of cells) { r -= c.w; if (r <= 0) { cell = c; break; } }
-    cell.ev.forEach(x => events.push({ beat: b + x.s, type: x.t }));
-  }
-  // Always anchor the phrase with a hit on beat 1.
-  if (!events.some(ev => ev.beat === 0)) events.unshift({ beat: 0, type: 'donR' });
-  // Never serve an all-but-empty phrase.
-  if (events.length < 2) events.push({ beat: len - 1, type: 'kaR' });
-  return events.sort((a, b) => a.beat - b.beat);
+  return [...map.entries()].map(([p, diff]) => ({ p, diff }));
 }
 
-function makePattern(len, score) {
+// Prefer phrases AT the current tier (60%), otherwise anything at or below it.
+function drawUnit(pool, tier) {
+  const eligible = pool.filter(x => x.diff <= tier);
+  const use = eligible.length ? eligible : pool;
+  const atTier = use.filter(x => x.diff === tier);
+  const from = atTier.length && Math.random() < 0.6 ? atTier : use;
+  return from[Math.floor(Math.random() * from.length)];
+}
+
+let lastPatternDiff = 1;   // difficulty of the most recently drawn phrase
+
+function makePattern(len, sc) {
   const slots = subdivSlots();
-  // Finer divisions were chosen on purpose, so leave the simple bank sooner.
-  const bankRounds = slots > 1 ? 2 : 4;
-  if (score < bankRounds && PATTERN_BANK[len]) return bankPattern(len);
-  return generatedPattern(len, score, slots);
+  const tier = currentTier(sc);
+  const pool = len === 2 ? halfPool(slots) : phrasePool(slots);
+  const units = len <= 4 ? 1 : len / 4;
+  const parts = [];
+  let maxDiff = 1;
+  for (let i = 0; i < units; i++) {
+    const u = drawUnit(pool, tier);
+    parts.push(u.p);
+    maxDiff = Math.max(maxDiff, u.diff);
+  }
+  lastPatternDiff = maxDiff;
+  return parsePhrase(parts.join(' '));
 }
 
 function currentBpm() {
@@ -703,6 +819,7 @@ function startGame(practice) {
   setPhase('');
   cellsEl.innerHTML = '';
   cellEls = [];
+  diffEl.textContent = '';
 
   const bi = 60 / currentBpm();
   const start = audio.currentTime + 0.3;
@@ -731,7 +848,7 @@ function schedulerTick() {
     currentPattern = pattern;
     // Audio is scheduled now, but the viz swaps in at the measure start (frame()),
     // so the previous phrase stays on screen while the player finishes it.
-    callMeasure = { start: m.start, beatInterval: bi, pattern, rendered: false };
+    callMeasure = { start: m.start, beatInterval: bi, pattern, diff: lastPatternDiff, rendered: false };
     if (metroOn) for (let b = 0; b < phraseLen; b++) playTick(m.start + b * bi, b === 0);
     pattern.forEach(e => playHit(e.type, m.start + e.beat * bi));
     pendingMeasure = { kind: 'response', start: m.start + phraseLen * bi, beatInterval: bi };
@@ -766,6 +883,7 @@ function frame() {
 
   if (callMeasure && !callMeasure.rendered && now >= callMeasure.start - 0.05) {
     renderPattern(callMeasure.pattern, phraseLen);
+    diffEl.textContent = '★'.repeat(callMeasure.diff) + '☆'.repeat(MAX_DIFF - callMeasure.diff);
     callMeasure.rendered = true;
   }
 
@@ -911,6 +1029,7 @@ function stopEverything() {
   setPhase('');
   statusEl.textContent = '';
   statusEl.classList.remove('warn');
+  diffEl.textContent = '';
   $('quitbtn').classList.add('hidden');
 }
 
@@ -1006,6 +1125,73 @@ $('practicebtn').addEventListener('click', () => {
 // The quit button must not register as a drum hit.
 $('quitbtn').addEventListener('pointerdown', ev => ev.stopPropagation());
 $('quitbtn').addEventListener('click', quitToTitle);
+
+/* ================= Dev mode ================= */
+
+function previewPhrase(ph) {
+  ensureAudio();
+  const bi = 60 / startBpm;
+  const t0 = audio.currentTime + 0.1;
+  parsePhrase(ph.p).forEach(e => playHit(e.type, t0 + e.beat * bi));
+}
+
+const DIVISION_NAMES = { 1: '4ths', 2: '8ths', 4: '16ths' };
+
+function renderDevList() {
+  const list = $('phraselist');
+  list.innerHTML = '';
+  PHRASES.forEach(ph => {
+    const row = document.createElement('div');
+    row.className = 'devrow';
+
+    const top = document.createElement('div');
+    top.className = 'devtop';
+    const prev = document.createElement('button');
+    prev.className = 'prevbtn';
+    prev.textContent = '▶';
+    prev.addEventListener('click', () => previewPhrase(ph));
+    const code = document.createElement('code');
+    code.textContent = ph.p;
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.textContent = DIVISION_NAMES[phraseSlots(ph.p)];
+    top.append(prev, code, chip);
+
+    const sel = document.createElement('div');
+    sel.className = 'diffsel';
+    for (let n = 1; n <= MAX_DIFF; n++) {
+      const b = document.createElement('button');
+      b.className = 'diffbtn' + (effDiff(ph) === n ? ' selected' : '');
+      b.textContent = n;
+      b.addEventListener('click', () => {
+        diffOverrides[ph.p] = n;
+        saveDiffs();
+        [...sel.children].forEach((c, i) => c.classList.toggle('selected', i === n - 1));
+      });
+      sel.appendChild(b);
+    }
+
+    row.append(top, sel);
+    list.appendChild(row);
+  });
+}
+
+$('devbtn').addEventListener('click', () => {
+  renderDevList();
+  $('title').classList.add('hidden');
+  $('dev').classList.remove('hidden');
+});
+
+$('devback').addEventListener('click', () => {
+  $('dev').classList.add('hidden');
+  $('title').classList.remove('hidden');
+});
+
+$('devreset').addEventListener('click', () => {
+  diffOverrides = {};
+  saveDiffs();
+  renderDevList();
+});
 
 $('continuebtn').addEventListener('click', () => {
   $('gameover').classList.add('hidden');
