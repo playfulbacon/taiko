@@ -330,6 +330,14 @@
   #hslist .empty { color: #666; font-style: italic; }
 
   #version { font-size: 12px; color: #555; letter-spacing: 1px; }
+  #options {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 4px 0;
+  }
+  #options.collapsed { display: none; }
 
   /* ---- dev mode ---- */
   .devtitle { font-size: 26px; color: #ffd23f; }
@@ -440,29 +448,33 @@
     Left and right count — a note's <b>lit half</b> shows which hand.<br>
     One miss and it's over!
   </div>
-  <div class="lenlabel">Phrase length (beats)</div>
-  <div id="lenpicker">
-    <button class="lenbtn" data-len="2">2</button>
-    <button class="lenbtn selected" data-len="4">4</button>
-    <button class="lenbtn" data-len="8">8</button>
-    <button class="lenbtn" data-len="16">16</button>
-  </div>
-  <div class="lenlabel">Starting tempo (BPM)</div>
-  <div id="tempopicker">
-    <button class="lenbtn tempobtn" data-bpm="80">80</button>
-    <button class="lenbtn tempobtn" data-bpm="96">96</button>
-    <button class="lenbtn tempobtn" data-bpm="112">112</button>
-    <button class="lenbtn tempobtn" data-bpm="128">128</button>
-  </div>
-  <div class="lenlabel">Beat division</div>
-  <div id="subpicker">
-    <button class="lenbtn subbtn" data-sub="4">4ths</button>
-    <button class="lenbtn subbtn" data-sub="8">8ths</button>
-    <button class="lenbtn subbtn" data-sub="16">16ths</button>
-  </div>
-  <div id="togglerow">
-    <button id="metrobtn" class="togglebtn">Metronome: ON</button>
-    <button id="voicebtn" class="togglebtn">Voice: ON</button>
+  <button id="optionsbtn" class="togglebtn">OPTIONS &#9662;</button>
+  <div id="options" class="collapsed">
+    <div class="lenlabel">Phrase length (beats)</div>
+    <div id="lenpicker">
+      <button class="lenbtn" data-len="2">2</button>
+      <button class="lenbtn selected" data-len="4">4</button>
+      <button class="lenbtn" data-len="8">8</button>
+      <button class="lenbtn" data-len="16">16</button>
+    </div>
+    <div class="lenlabel">Starting tempo (BPM)</div>
+    <div id="tempopicker">
+      <button class="lenbtn tempobtn" data-bpm="80">80</button>
+      <button class="lenbtn tempobtn" data-bpm="96">96</button>
+      <button class="lenbtn tempobtn" data-bpm="112">112</button>
+      <button class="lenbtn tempobtn" data-bpm="128">128</button>
+    </div>
+    <div class="lenlabel">Beat division</div>
+    <div id="subpicker">
+      <button class="lenbtn subbtn" data-sub="4">4ths</button>
+      <button class="lenbtn subbtn" data-sub="8">8ths</button>
+      <button class="lenbtn subbtn" data-sub="16">16ths</button>
+    </div>
+    <div id="togglerow">
+      <button id="metrobtn" class="togglebtn">Metronome: ON</button>
+      <button id="voicebtn" class="togglebtn">Voice: ON</button>
+    </div>
+    <button id="devbtn" class="togglebtn">DEV MODE</button>
   </div>
   <div id="highscores">
     <h3>High scores</h3>
@@ -472,7 +484,6 @@
     <button id="startbtn" class="bigbtn">PLAY</button>
     <button id="practicebtn" class="bigbtn secondary">PRACTICE</button>
   </div>
-  <button id="devbtn" class="togglebtn">DEV MODE</button>
   <div id="version"></div>
   </div>
 </div>
@@ -513,7 +524,7 @@
 /* ================= Tunables ================= */
 
 // Bumped on every update so the title screen shows which build is live.
-const APP_VERSION = 11;
+const APP_VERSION = 12;
 
 // Forgiveness: how far off a tap may be from the true beat and still count,
 // as a fraction of one beat on EACH side. 0.45 means nearly half a beat of
@@ -524,7 +535,7 @@ const BPM_STEP = 6;         // tempo increase at each step up
 const TEMPO_EVERY = 3;      // tempo steps up every this many cleared phrases
 const MAX_BPM = 168;        // tempo cap
 const TEMPO_CHOICES = [80, 96, 112, 128];  // title-screen starting tempos
-const DEFAULT_BPM = 96;
+const DEFAULT_BPM = 128;
 
 const COUNT_IN_BEATS = 4;   // metronome count-in before the first phrase
 
@@ -637,9 +648,45 @@ const diffEl = $('diffline');
 /* ================= Audio synthesis ================= */
 
 function ensureAudio() {
+  if (audio && audio.state === 'closed') audio = null;
   if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
-  if (audio.state === 'suspended') audio.resume();
+  if (audio.state !== 'running') audio.resume();
 }
+
+// Run cb only once the context is genuinely running. Mobile browsers suspend
+// (iOS: "interrupt") the context when the page is backgrounded, and sometimes
+// refuse to revive it — in that case the stuck context is replaced with a
+// fresh one. Call this from a user gesture (the PLAY/PRACTICE/preview taps).
+function ensureAudioReady(cb) {
+  ensureAudio();
+  if (audio.state === 'running') { cb(); return; }
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    if (!audio || audio.state !== 'running') {
+      try { if (audio) audio.close(); } catch (err) {}
+      audio = null;
+      ensureAudio();
+    }
+    cb();
+  };
+  try {
+    const p = audio.resume();
+    if (p && p.then) p.then(finish, finish);
+  } catch (err) {}
+  setTimeout(finish, 250);
+}
+
+// Wake the context whenever the page comes back; end a run that was
+// backgrounded mid-game, since its clock stopped while hidden.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (running) { practiceMode ? quitToTitle() : gameOver('Paused'); }
+  } else if (audio && audio.state !== 'running') {
+    audio.resume();
+  }
+});
 
 function track(node) { scheduledNodes.push(node); return node; }
 
@@ -688,14 +735,14 @@ const SYLLABLE = { donR: 'don', donL: 'ko', kaR: 'ka', kaL: 'ra' };
 
 const VOWELS = {  // [center Hz, gain, Q] per formant band
   o: [[430, 1.0, 10], [850, 0.5, 10], [2500, 0.15, 12]],
-  a: [[750, 1.0, 9], [1200, 0.6, 10], [2600, 0.15, 12]],
+  a: [[750, 1.0, 9], [1200, 0.5, 8], [2600, 0.07, 12]],
 };
 
 const VOICES = {
-  don: { onset: 'd', vowel: 'o', nasal: true,  f0: [140, 104], dur: 0.22 },
-  ko:  { onset: 'k', vowel: 'o', nasal: false, f0: [152, 116], dur: 0.16 },
-  ka:  { onset: 'k', vowel: 'a', nasal: false, f0: [150, 112], dur: 0.17 },
-  ra:  { onset: 'r', vowel: 'a', nasal: false, f0: [146, 110], dur: 0.16 },
+  don: { onset: 'd', vowel: 'o', nasal: true,  f0: [140, 104], dur: 0.22, amp: 0.32 },
+  ko:  { onset: 'k', vowel: 'o', nasal: false, f0: [152, 116], dur: 0.16, amp: 0.30 },
+  ka:  { onset: 'k', vowel: 'a', nasal: false, f0: [150, 110], dur: 0.17, amp: 0.26 },
+  ra:  { onset: 'r', vowel: 'a', nasal: false, f0: [146, 108], dur: 0.16, amp: 0.26 },
 };
 
 function playVoice(word, t, maxDur) {
@@ -710,13 +757,23 @@ function playVoice(word, t, maxDur) {
 
   const out = audio.createGain();
   out.gain.setValueAtTime(0, vStart);
-  out.gain.linearRampToValueAtTime(0.32, vStart + 0.02);
+  out.gain.linearRampToValueAtTime(spec.amp, vStart + 0.02);
   if (spec.nasal) {
-    out.gain.setValueAtTime(0.32, nStart);
-    out.gain.linearRampToValueAtTime(0.14, nStart + 0.02);
+    out.gain.setValueAtTime(spec.amp, nStart);
+    out.gain.linearRampToValueAtTime(spec.amp * 0.45, nStart + 0.02);
   }
   out.gain.exponentialRampToValueAtTime(0.001, tEnd);
-  out.connect(audio.destination);
+  out.gain.linearRampToValueAtTime(0, tEnd + 0.012);  // true silence, no buzz cut
+  // Master lowpass; non-nasal syllables sweep it down so the tail relaxes
+  // instead of ending on raw sawtooth-through-formant fizz.
+  const lp = audio.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(4200, t);
+  if (!spec.nasal) {
+    lp.frequency.setValueAtTime(4200, t + dur * 0.55);
+    lp.frequency.exponentialRampToValueAtTime(1200, tEnd);
+  }
+  out.connect(lp).connect(audio.destination);
 
   const osc = track(audio.createOscillator());
   osc.type = 'sawtooth';
@@ -746,7 +803,7 @@ function playVoice(word, t, maxDur) {
     osc.connect(bp).connect(fg).connect(out);
   });
   osc.start(t);
-  osc.stop(tEnd + 0.02);
+  osc.stop(tEnd + 0.03);
 
   // Plosive burst: aspirated for k, a soft high click for d.
   if (spec.onset === 'k' || spec.onset === 'd') {
@@ -1367,15 +1424,17 @@ voicebtn.addEventListener('click', () => {
 renderVoiceBtn();
 
 $('startbtn').addEventListener('click', () => {
-  ensureAudio();
-  $('title').classList.add('hidden');
-  startGame(false);
+  ensureAudioReady(() => {
+    $('title').classList.add('hidden');
+    startGame(false);
+  });
 });
 
 $('practicebtn').addEventListener('click', () => {
-  ensureAudio();
-  $('title').classList.add('hidden');
-  startGame(true);
+  ensureAudioReady(() => {
+    $('title').classList.add('hidden');
+    startGame(true);
+  });
 });
 
 // The quit button must not register as a drum hit.
@@ -1385,17 +1444,18 @@ $('quitbtn').addEventListener('click', quitToTitle);
 /* ================= Dev mode ================= */
 
 function previewPhrase(ph) {
-  ensureAudio();
-  const bi = 60 / startBpm;
-  const t0 = audio.currentTime + 0.1;
-  const evs = parsePhrase(ph.p);
-  evs.forEach((e, i) => {
-    const t = t0 + e.beat * bi;
-    playHit(e.type, t);
-    if (voiceOn) {
-      const nextBeat = i + 1 < evs.length ? evs[i + 1].beat : e.beat + 1;
-      playVoice(SYLLABLE[e.type], t, (nextBeat - e.beat) * bi);
-    }
+  ensureAudioReady(() => {
+    const bi = 60 / startBpm;
+    const t0 = audio.currentTime + 0.1;
+    const evs = parsePhrase(ph.p);
+    evs.forEach((e, i) => {
+      const t = t0 + e.beat * bi;
+      playHit(e.type, t);
+      if (voiceOn) {
+        const nextBeat = i + 1 < evs.length ? evs[i + 1].beat : e.beat + 1;
+        playVoice(SYLLABLE[e.type], t, (nextBeat - e.beat) * bi);
+      }
+    });
   });
 }
 
@@ -1471,6 +1531,11 @@ $('continuebtn').addEventListener('click', () => {
 
 renderHighScores();
 $('version').textContent = 'v' + APP_VERSION;
+
+$('optionsbtn').addEventListener('click', () => {
+  const collapsed = $('options').classList.toggle('collapsed');
+  $('optionsbtn').innerHTML = 'OPTIONS ' + (collapsed ? '&#9662;' : '&#9652;');
+});
 </script>
 </body>
 </html>

@@ -53,7 +53,7 @@ script:
 | `FORGIVENESS` | `0.45` | Timing slop allowed on each side of a beat, as a fraction of one beat. Lower = stricter. |
 | `BPM_STEP` / `TEMPO_EVERY` | `6` / `3` | Tempo rises 6 BPM every 3 cleared phrases, after a "TEMPO UP!" rest measure. |
 | `MAX_BPM` | `168` | Tempo cap. |
-| `TEMPO_CHOICES` / `DEFAULT_BPM` | `[80, 96, 112, 128]` / `96` | Starting tempos offered on the title screen. |
+| `TEMPO_CHOICES` / `DEFAULT_BPM` | `[80, 96, 112, 128]` / `128` | Starting tempos offered on the title screen (in the collapsible OPTIONS area). |
 | `PHRASES` | — | The phrase library: 4-beat units with default difficulties. Notation: `D` = right don, `d` = left ko, `K` = right ka, `k` = left ra, `.` = rest; letters per beat token set its grid (1 = 4ths, 2 = 8ths, 4 = 16ths). |
 | `TIER_EVERY` | `3` | The difficulty tier rises every this many points. |
 
