@@ -43,6 +43,19 @@
   }
   #phaselabel.listen { color: #ff5a5a; }
   #phaselabel.repeat { color: #4cd964; }
+  #phaselabel.tempo { color: #ffd23f; }
+  .flystar {
+    position: fixed;
+    z-index: 8;
+    color: #ffd23f;
+    font-size: 22px;
+    line-height: 1;
+    margin-left: -11px;
+    margin-top: -11px;
+    pointer-events: none;
+    transform: translate(0, 0);
+    transition: transform 0.42s cubic-bezier(0.5, -0.2, 0.6, 1), opacity 0.42s;
+  }
   #cells {
     display: flex;
     flex-direction: column;
@@ -153,24 +166,40 @@
     align-items: flex-end;
     justify-content: space-between;
     padding: 0 22px 26px;
-    color: #4fc3f766;
-    font-size: 12px;
-    font-weight: 700;
+    color: #4fc3f788;
+    font-size: 14px;
+    font-weight: 800;
     letter-spacing: 2px;
     pointer-events: none;
   }
-  #drum {
+  #drumshell {
     width: min(58vw, 30vh);
     height: min(58vw, 30vh);
+    position: relative;
+  }
+  #drum {
+    width: 100%;
+    height: 100%;
     border-radius: 50%;
     background: radial-gradient(circle at 38% 32%, #d05555, #8a2a2a 70%);
-    border: 13px solid #4fc3f7;
     box-shadow: 0 0 0 4px #16161e, 0 0 24px #00000088;
     overflow: hidden;
     position: relative;
     transition: transform 0.05s;
     pointer-events: none;
   }
+  /* The rim, split into left/right half-rings to mirror the note symbols. */
+  .ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 13px solid #4fc3f7;
+    pointer-events: none;
+    transition: border-color 0.1s;
+  }
+  #ringL { clip-path: inset(0 calc(50% + 2px) 0 0); }
+  #ringR { clip-path: inset(0 0 0 calc(50% + 2px)); }
+  .ring.flash { border-color: #e8f7ff; filter: drop-shadow(0 0 10px #4fc3f7); }
   .dhalf {
     position: absolute;
     top: 0; bottom: 0;
@@ -179,15 +208,13 @@
     align-items: center;
     justify-content: center;
     color: #ffd9d977;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 800;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
   }
   #halfL { left: 0; border-right: 1px dashed #ffffff33; }
   #halfR { right: 0; }
   .dhalf.flash { background: radial-gradient(circle at 50% 50%, #ffb0b0, #ff5a5acc 80%); color: #fff; }
-  #drum.flash-ka { border-color: #bfeaff; transform: scale(1.02); }
-  #drum.beatpulse { transform: scale(1.03); }
   .rimglow {
     position: absolute;
     top: 0; bottom: 0;
@@ -233,8 +260,8 @@
   #lenpicker, #tempopicker, #subpicker { display: flex; gap: 10px; }
   .tempobtn { font-size: 16px; height: 46px; }
   .subbtn { font-size: 15px; height: 46px; width: 76px; }
+  #togglerow { display: flex; gap: 10px; margin-top: 8px; }
   .togglebtn {
-    margin-top: 8px;
     padding: 12px 22px;
     border-radius: 14px;
     border: 2px solid #3a3a48;
@@ -321,9 +348,16 @@
     gap: 8px;
   }
   .devtop { display: flex; align-items: center; gap: 10px; }
-  .devtop code {
+  .devinfo {
     flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     text-align: left;
+  }
+  .devname { font-size: 12px; color: #999; }
+  .devinfo code {
     font-size: 15px;
     letter-spacing: 1px;
     color: #eee;
@@ -380,12 +414,16 @@
     <div id="status"></div>
   </div>
   <div id="drumzone">
-    <div id="rimhint"><span>L&nbsp;RIM</span><span>RIM&nbsp;R</span></div>
+    <div id="rimhint"><span>RA</span><span>KA</span></div>
     <div id="rimL" class="rimglow"></div>
     <div id="rimR" class="rimglow"></div>
-    <div id="drum">
-      <div id="halfL" class="dhalf">L</div>
-      <div id="halfR" class="dhalf">R</div>
+    <div id="drumshell">
+      <div id="drum">
+        <div id="halfL" class="dhalf">KO</div>
+        <div id="halfR" class="dhalf">DON</div>
+      </div>
+      <div id="ringL" class="ring"></div>
+      <div id="ringR" class="ring"></div>
     </div>
   </div>
 </div>
@@ -420,7 +458,10 @@
     <button class="lenbtn subbtn" data-sub="8">8ths</button>
     <button class="lenbtn subbtn" data-sub="16">16ths</button>
   </div>
-  <button id="metrobtn" class="togglebtn">Metronome: ON</button>
+  <div id="togglerow">
+    <button id="metrobtn" class="togglebtn">Metronome: ON</button>
+    <button id="voicebtn" class="togglebtn">Voice: ON</button>
+  </div>
   <div id="highscores">
     <h3>High scores</h3>
     <ol id="hslist"></ol>
@@ -473,7 +514,8 @@
 // slop either way. Lower = stricter.
 const FORGIVENESS = 0.45;
 
-const BPM_STEP = 2;         // tempo increase per successful phrase (per point)
+const BPM_STEP = 6;         // tempo increase at each step up
+const TEMPO_EVERY = 3;      // tempo steps up every this many cleared phrases
 const MAX_BPM = 168;        // tempo cap
 const TEMPO_CHOICES = [80, 96, 112, 128];  // title-screen starting tempos
 const DEFAULT_BPM = 96;
@@ -488,34 +530,49 @@ const COUNT_IN_BEATS = 4;   // metronome count-in before the first phrase
    `d` is the default difficulty (1–5); dev mode can override it per phrase.
    Longer phrase lengths chain units; 2-beat games use unit halves. */
 const PHRASES = [
-  // Quarter-note phrases (playable at any beat division)
-  { p: 'D D K .', d: 1 },
-  { p: 'D K D K', d: 1 },
-  { p: 'D d K .', d: 1 },
-  { p: 'D . D K', d: 1 },
-  { p: 'D d D K', d: 2 },
-  { p: 'D K k D', d: 2 },
-  { p: 'D D k k', d: 2 },
-  { p: 'K D k D', d: 3 },
-  { p: 'D k d K', d: 3 },
-  // Eighth-note phrases
-  { p: 'Dd D K .', d: 2 },
-  { p: 'D Dd K K', d: 2 },
-  { p: 'Dd Dd K .', d: 3 },
-  { p: 'D Kk D .', d: 3 },
-  { p: 'Dd K Dd K', d: 4 },
-  { p: 'D dK d K', d: 4 },
-  { p: 'Kk Kk D .', d: 4 },
-  { p: 'Dd dD K k', d: 5 },
-  // Sixteenth-note phrases
-  { p: 'DdD. K DdD. K', d: 4 },
-  { p: 'D DdD. K .', d: 4 },
-  { p: 'DdDd K Kk .', d: 5 },
-  { p: 'D .dD. K K', d: 5 },
-  { p: 'DdDd DdDd K .', d: 5 },
+  // ---- Quarter-note phrases (playable at any beat division) ----
+  { p: 'D D D .', d: 1, name: 'Renshū: straight don' },
+  { p: 'D . D .', d: 1, name: 'Half-time don' },
+  { p: 'D d D d', d: 1, name: 'Alternating hands' },
+  { p: 'D D K .', d: 1, name: 'Don don ka' },
+  { p: 'D K D K', d: 1, name: 'Don ka don ka' },
+  { p: 'D d K .', d: 1, name: 'Don ko ka' },
+  { p: 'D . D K', d: 1, name: 'Don — don ka' },
+  { p: 'D d D K', d: 2, name: 'Don ko don ka' },
+  { p: 'D K k D', d: 2, name: 'Don ka ra don' },
+  { p: 'D D k k', d: 2, name: 'Don don ra ra' },
+  { p: 'K k K k', d: 2, name: 'Alternating rims' },
+  { p: 'K D k D', d: 3, name: 'Rim lead' },
+  { p: 'D k d K', d: 3, name: 'Cross pattern' },
+  // ---- Eighth-note phrases ----
+  { p: 'D Dd D .', d: 2, name: 'Don doko don' },
+  { p: 'Dd D K .', d: 2, name: 'Doko don ka' },
+  { p: 'D Dd K K', d: 2, name: 'Don doko ka ka' },
+  { p: 'D Dd D Dd', d: 3, name: 'Matsuri: don doko don doko' },
+  { p: 'Dd Dd K .', d: 3, name: 'Doko doko ka' },
+  { p: 'Dd Dd Dd Dd', d: 3, name: 'Oroshi roll (8ths)' },
+  { p: 'D D Dd D', d: 3, name: 'Miyake: don don doko don' },
+  { p: 'D Kk D .', d: 3, name: 'Don kara don' },
+  { p: 'D D Kk K', d: 3, name: 'Don don kara ka' },
+  { p: 'Dd K Dd K', d: 4, name: 'Doko ka doko ka' },
+  { p: 'D dK d K', d: 4, name: 'Split doko' },
+  { p: 'Kk Kk D .', d: 4, name: 'Kara kara don' },
+  { p: 'D .d D .d', d: 4, name: 'Off-beat ko' },
+  { p: 'D .K D .K', d: 4, name: 'Off-beat ka' },
+  { p: 'D Dd Dd D', d: 4, name: 'Yatai-inspired' },
+  { p: 'Dd dD K k', d: 5, name: 'Reverse sticking' },
+  { p: 'Dd Kk Dd Kk', d: 5, name: 'Doko kara doko kara' },
+  // ---- Sixteenth-note phrases ----
+  { p: 'DdD. K DdD. K', d: 4, name: 'Doko-don ka' },
+  { p: 'D DdD. K .', d: 4, name: 'Don doko-don ka' },
+  { p: 'DdD. DdD. K .', d: 4, name: 'Double doko-don ka' },
+  { p: 'DdDd K Kk .', d: 5, name: 'Sixteenth run' },
+  { p: 'D .dD. K K', d: 5, name: 'Syncopated doko' },
+  { p: 'DdDd DdDd K .', d: 5, name: 'Oroshi build (16ths)' },
+  { p: 'DdDd DdDd D .', d: 5, name: 'Oroshi roll (16ths)' },
 ];
 const MAX_DIFF = 5;
-const TIER_EVERY = 3;   // difficulty tier rises every this many points
+const TIER_EVERY = 3;   // difficulty tier rises every this many cleared phrases
 
 const SYMBOLS = { D: 'donR', d: 'donL', K: 'kaR', k: 'kaL' };
 const famOf = t => t.slice(0, -1);   // 'don' | 'ka'
@@ -545,8 +602,12 @@ if (!TEMPO_CHOICES.includes(startBpm)) startBpm = DEFAULT_BPM;
 let subdivNote = parseInt(localStorage.getItem('taikosays_subdiv') || '8', 10);
 if (![4, 8, 16].includes(subdivNote)) subdivNote = 8;
 let metroOn = localStorage.getItem('taikosays_metro') !== '0';
+let voiceOn = localStorage.getItem('taikosays_voice') !== '0';
 let practiceMode = false;
 let practiceMsgTimer = null;
+let phrasesCleared = 0;     // successful phrases this run (drives tempo & tier)
+let lastScheduledBpm = 0;   // detects tempo steps so a rest measure gets inserted
+let breakMeasure = null;    // active "TEMPO UP!" rest measure
 
 // Slots per beat for the selected note division (4ths→1, 8ths→2, 16ths→4).
 const subdivSlots = () => subdivNote / 4;
@@ -609,6 +670,21 @@ function playKa(t, side) {
 
 function playHit(type, t) {
   (famOf(type) === 'don' ? playDon : playKa)(t, sideOf(type));
+}
+
+/* Kuchi-shoga voice: speak the syllable of each hit as the call plays.
+   Speech synthesis can't be scheduled sample-accurately, so syllables are
+   spoken as their notes light up; if the voice falls behind on dense
+   phrases, extra syllables are dropped rather than queued. */
+const SYLLABLE = { donR: 'don', donL: 'ko', kaR: 'kah', kaL: 'rah' };
+
+function speak(word) {
+  if (!('speechSynthesis' in window)) return;
+  if (speechSynthesis.pending) return;
+  const u = new SpeechSynthesisUtterance(word);
+  u.rate = 1.7;
+  u.pitch = 1.1;
+  speechSynthesis.speak(u);
 }
 
 // Metronome "tsu": a muted stick-knock — a small mid-range thump plus a soft
@@ -731,7 +807,7 @@ function makePattern(len, sc) {
 }
 
 function currentBpm() {
-  return Math.min(MAX_BPM, startBpm + score * BPM_STEP);
+  return Math.min(MAX_BPM, startBpm + Math.floor(phrasesCleared / TEMPO_EVERY) * BPM_STEP);
 }
 
 /* ================= Visualization ================= */
@@ -785,6 +861,29 @@ function highlightBeat(idx) {
   cellEls.forEach((c, i) => c.classList.toggle('playhead', i === idx));
 }
 
+// Stars fly from the difficulty line into the score when a phrase is cleared.
+function flyStars(n) {
+  const from = diffEl.getBoundingClientRect();
+  const to = scoreEl.getBoundingClientRect();
+  const tox = to.left + to.width / 2, toy = to.top + to.height / 2;
+  for (let i = 0; i < n; i++) {
+    const s = document.createElement('div');
+    s.className = 'flystar';
+    s.textContent = '★';
+    const fx = from.left + from.width / 2 + (i - (n - 1) / 2) * 24;
+    const fy = from.top + from.height / 2;
+    s.style.left = fx + 'px';
+    s.style.top = fy + 'px';
+    s.style.transitionDelay = (i * 55) + 'ms';
+    document.body.appendChild(s);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      s.style.transform = 'translate(' + (tox - fx) + 'px, ' + (toy - fy) + 'px) scale(0.35)';
+      s.style.opacity = '0.15';
+    }));
+    setTimeout(() => s.remove(), 700 + i * 55);
+  }
+}
+
 function flashDrum(type) {
   const side = sideOf(type);
   if (famOf(type) === 'don') {
@@ -795,11 +894,13 @@ function flashDrum(type) {
     setTimeout(() => half.classList.remove('flash'), 110);
   } else {
     const glow = $(side === 'L' ? 'rimL' : 'rimR');
+    const ring = $(side === 'L' ? 'ringL' : 'ringR');
     glow.classList.remove('flash');
+    ring.classList.remove('flash');
     void glow.offsetWidth;
     glow.classList.add('flash');
-    drumEl.classList.add('flash-ka');
-    setTimeout(() => { glow.classList.remove('flash'); drumEl.classList.remove('flash-ka'); }, 110);
+    ring.classList.add('flash');
+    setTimeout(() => { glow.classList.remove('flash'); ring.classList.remove('flash'); }, 110);
   }
 }
 
@@ -811,10 +912,13 @@ function startGame(practice) {
   $('quitbtn').classList.toggle('hidden', !practiceMode);
   running = true;
   score = 0;
+  phrasesCleared = 0;
+  lastScheduledBpm = currentBpm();
   scoreEl.textContent = '0';
   scheduledNodes = [];
   response = null;
   callMeasure = null;
+  breakMeasure = null;
   statusEl.textContent = 'Get ready…';
   setPhase('');
   cellsEl.innerHTML = '';
@@ -844,7 +948,19 @@ function schedulerTick() {
   if (scheduledNodes.length > 300) scheduledNodes.splice(0, 200);
 
   if (m.kind === 'call') {
-    const pattern = makePattern(phraseLen, score);
+    // A tempo step gets a rest measure first: ticks at the NEW speed and a
+    // "TEMPO UP!" banner, so the player can settle in before the next call.
+    const bpmNow = currentBpm();
+    if (bpmNow !== lastScheduledBpm) {
+      lastScheduledBpm = bpmNow;
+      const nbi = 60 / bpmNow;
+      breakMeasure = { start: m.start, end: m.start + phraseLen * nbi, bpm: bpmNow, beatInterval: nbi, rendered: false };
+      // These ticks play even with the metronome off — they ARE the acclimation.
+      for (let b = 0; b < phraseLen; b++) playTick(m.start + b * nbi, b === 0);
+      pendingMeasure = { kind: 'call', start: breakMeasure.end };
+      return;
+    }
+    const pattern = makePattern(phraseLen, phrasesCleared);
     currentPattern = pattern;
     // Audio is scheduled now, but the viz swaps in at the measure start (frame()),
     // so the previous phrase stays on screen while the player finishes it.
@@ -861,6 +977,8 @@ function schedulerTick() {
       start: m.start,
       end: m.start + phraseLen * bi,
       w,
+      diff: callMeasure ? callMeasure.diff : 1,
+      completed: false,
       events: currentPattern.map(e => ({
         time: m.start + e.beat * bi,
         type: e.type,
@@ -881,13 +999,26 @@ function frame() {
   const inCall = callMeasure && now >= callMeasure.start && !inResponse &&
                  now < callMeasure.start + phraseLen * callMeasure.beatInterval;
 
+  const inBreak = breakMeasure && now >= breakMeasure.start && now < breakMeasure.end;
+  if (breakMeasure && !breakMeasure.rendered && now >= breakMeasure.start - 0.05) {
+    renderPattern([], phraseLen);
+    diffEl.textContent = '';
+    breakMeasure.rendered = true;
+  }
+
   if (callMeasure && !callMeasure.rendered && now >= callMeasure.start - 0.05) {
     renderPattern(callMeasure.pattern, phraseLen);
     diffEl.textContent = '★'.repeat(callMeasure.diff) + '☆'.repeat(MAX_DIFF - callMeasure.diff);
     callMeasure.rendered = true;
+    breakMeasure = null;
   }
 
-  if (inCall) {
+  if (inBreak) {
+    phaseEl.textContent = 'TEMPO UP!';
+    phaseEl.className = 'tempo';
+    statusEl.textContent = 'Now ' + breakMeasure.bpm + ' BPM';
+    highlightBeat(Math.floor((now - breakMeasure.start) / breakMeasure.beatInterval));
+  } else if (inCall) {
     setPhase('listen');
     const beat = (now - callMeasure.start) / callMeasure.beatInterval;
     highlightBeat(Math.floor(beat));
@@ -895,6 +1026,7 @@ function frame() {
       if (e.el && !e.el.classList.contains('played') && now >= callMeasure.start + e.beat * callMeasure.beatInterval) {
         e.el.classList.add('played');
         flashDrum(e.type);
+        if (voiceOn) speak(SYLLABLE[e.type]);
       }
     });
   } else if (inResponse) {
@@ -906,18 +1038,13 @@ function frame() {
 
   if (response) {
     // A hit whose window has fully passed and was never matched = miss.
+    // (Scoring happens in judge() the moment the final hit lands.)
     const missed = response.events.some(e => !e.matched && now > e.time + response.w);
     if (missed) {
       handleMiss('Missed a hit');
       if (!running) return;
     } else if (now > response.end + response.w) {
-      // Phrase survived: all events matched and the trailing window has passed.
       response = null;
-      score++;
-      scoreEl.textContent = score;
-      scoreEl.classList.add('pop');
-      setTimeout(() => scoreEl.classList.remove('pop'), 120);
-      // Clear the green hit-glow for the next phrase (pattern re-renders on next call).
     }
   }
 
@@ -969,6 +1096,20 @@ function judge(type, t) {
       best.el.classList.add('hit');
       const cell = best.el.closest('.cell');
       if (cell) cell.classList.add('goodcell');
+    }
+    // Final hit landed: the phrase is cleared. Score by its difficulty, with
+    // that many stars flying from the difficulty line into the score.
+    if (!response.completed && response.events.every(ev => ev.matched)) {
+      response.completed = true;
+      const diff = response.diff;
+      score += diff;
+      phrasesCleared++;
+      flyStars(diff);
+      setTimeout(() => {
+        scoreEl.textContent = score;
+        scoreEl.classList.add('pop');
+        setTimeout(() => scoreEl.classList.remove('pop'), 120);
+      }, 430);
     }
   } else if (sameFamInWindow) {
     handleMiss('Wrong side');
@@ -1025,6 +1166,8 @@ function stopEverything() {
   response = null;
   callMeasure = null;
   pendingMeasure = null;
+  breakMeasure = null;
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
   highlightBeat(-1);
   setPhase('');
   statusEl.textContent = '';
@@ -1110,6 +1253,19 @@ metrobtn.addEventListener('click', () => {
 });
 renderMetroBtn();
 
+const voicebtn = $('voicebtn');
+function renderVoiceBtn() {
+  voicebtn.textContent = 'Voice: ' + (voiceOn ? 'ON' : 'OFF');
+  voicebtn.classList.toggle('selected', voiceOn);
+}
+voicebtn.addEventListener('click', () => {
+  voiceOn = !voiceOn;
+  localStorage.setItem('taikosays_voice', voiceOn ? '1' : '0');
+  renderVoiceBtn();
+  if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel();
+});
+renderVoiceBtn();
+
 $('startbtn').addEventListener('click', () => {
   ensureAudio();
   $('title').classList.add('hidden');
@@ -1150,12 +1306,18 @@ function renderDevList() {
     prev.className = 'prevbtn';
     prev.textContent = '▶';
     prev.addEventListener('click', () => previewPhrase(ph));
+    const info = document.createElement('div');
+    info.className = 'devinfo';
+    const name = document.createElement('div');
+    name.className = 'devname';
+    name.textContent = ph.name;
     const code = document.createElement('code');
     code.textContent = ph.p;
+    info.append(name, code);
     const chip = document.createElement('span');
     chip.className = 'chip';
     chip.textContent = DIVISION_NAMES[phraseSlots(ph.p)];
-    top.append(prev, code, chip);
+    top.append(prev, info, chip);
 
     const sel = document.createElement('div');
     sel.className = 'diffsel';

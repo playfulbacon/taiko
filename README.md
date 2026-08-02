@@ -7,9 +7,12 @@ on the very next beat (the "response"). The drum and rim are split into left
 and right halves: tap **inside the drum circle** for the bass hit (right-hand
 *don* / left-hand *ko*), tap **anywhere outside it** for the rim hit
 (right-hand *ka* / left-hand *ra*). Left and right count — each note in the
-visualization lights up on the half matching the hand. Miss a hit, hit the
-wrong drum or side, or add an extra hit and the game ends. Your score is the
-number of phrases you successfully repeat.
+visualization lights up on the half matching the hand, the drum halves are
+labeled DON/KO, the split rim ring is labeled KA/RA, and (optionally) a
+synthesized voice speaks each syllable as the call plays. Miss a hit, hit the
+wrong drum or side, or add an extra hit and the game ends. **Each phrase you
+clear scores its difficulty in points** (1–5), with the stars flying into
+the score.
 
 - **Beat visualization** across the top shows the pattern and a moving playhead
   (long phrases wrap into rows of 8); your correct hits light up green.
@@ -23,12 +26,19 @@ number of phrases you successfully repeat.
 - **Practice mode** plays the same way but never ends: a miss just forfeits
   that phrase with a gentle buzz and play rolls on. A quit button in the
   corner returns to the title screen. Practice runs don't record high scores.
-- Phrases come from a curated library of 4-beat units written in kuchi-shoga
-  notation with traditional sticking (*don ko ka*, *doko doko ka*, …), each
-  assigned a **difficulty from 1 to 5**. The game serves phrases at your
-  current tier — which starts at 1 and rises every 3 points — and shows the
-  phrase's difficulty as stars under the beat display. Longer phrase lengths
-  chain library units; 2-beat games use unit halves.
+- Phrases come from a curated library of 37 four-beat units written in
+  kuchi-shoga notation. They are hand-arranged but grounded in documented
+  traditional figures — the matsuri-daiko base (*don doko don doko*),
+  Miyake-style (*don don doko don*), oroshi rolls, *kara* rim figures —
+  simplified and quantized to fit fixed-length phrases; each carries a name
+  saying what it's based on. Every phrase has a **difficulty from 1 to 5**.
+  The game serves phrases at your current tier — which starts at 1 and rises
+  every 3 cleared phrases — and shows the phrase's difficulty as stars under
+  the beat display. Longer phrase lengths chain library units; 2-beat games
+  use unit halves.
+- The tempo steps up every 3 cleared phrases. Each step inserts a rest
+  measure first: the beat ticks at the new speed under a "TEMPO UP!" banner
+  so you can settle in before the next call.
 - **Dev mode** (button on the title screen) lists every phrase in the library
   with a ▶ preview button and lets you reassign its difficulty (1–5). Choices
   are saved locally as overrides; RESET restores the defaults.
@@ -41,7 +51,7 @@ script:
 | Variable | Default | Meaning |
 |---|---|---|
 | `FORGIVENESS` | `0.45` | Timing slop allowed on each side of a beat, as a fraction of one beat. Lower = stricter. |
-| `BPM_STEP` | `2` | Tempo rises this much with every point scored. |
+| `BPM_STEP` / `TEMPO_EVERY` | `6` / `3` | Tempo rises 6 BPM every 3 cleared phrases, after a "TEMPO UP!" rest measure. |
 | `MAX_BPM` | `168` | Tempo cap. |
 | `TEMPO_CHOICES` / `DEFAULT_BPM` | `[80, 96, 112, 128]` / `96` | Starting tempos offered on the title screen. |
 | `PHRASES` | — | The phrase library: 4-beat units with default difficulties. Notation: `D` = right don, `d` = left ko, `K` = right ka, `k` = left ra, `.` = rest; letters per beat token set its grid (1 = 4ths, 2 = 8ths, 4 = 16ths). |
