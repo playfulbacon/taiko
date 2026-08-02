@@ -329,6 +329,8 @@
   #hslist .medal { margin-right: 8px; }
   #hslist .empty { color: #666; font-style: italic; }
 
+  #version { font-size: 12px; color: #555; letter-spacing: 1px; }
+
   /* ---- dev mode ---- */
   .devtitle { font-size: 26px; color: #ffd23f; }
   #dev .subtitle code { color: #ddd; background: #23232e; padding: 1px 5px; border-radius: 5px; }
@@ -471,6 +473,7 @@
     <button id="practicebtn" class="bigbtn secondary">PRACTICE</button>
   </div>
   <button id="devbtn" class="togglebtn">DEV MODE</button>
+  <div id="version"></div>
   </div>
 </div>
 
@@ -508,6 +511,9 @@
 'use strict';
 
 /* ================= Tunables ================= */
+
+// Bumped on every update so the title screen shows which build is live.
+const APP_VERSION = 11;
 
 // Forgiveness: how far off a tap may be from the true beat and still count,
 // as a fraction of one beat on EACH side. 0.45 means nearly half a beat of
@@ -1464,6 +1470,7 @@ $('continuebtn').addEventListener('click', () => {
 });
 
 renderHighScores();
+$('version').textContent = 'v' + APP_VERSION;
 </script>
 </body>
 </html>
