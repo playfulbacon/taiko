@@ -679,12 +679,31 @@ function playHit(type, t) {
 const SYLLABLE = { donR: 'don', donL: 'ko', kaR: 'kah', kaL: 'rah' };
 
 function speak(word) {
-  if (!('speechSynthesis' in window)) return;
-  if (speechSynthesis.pending) return;
-  const u = new SpeechSynthesisUtterance(word);
-  u.rate = 1.7;
-  u.pitch = 1.1;
-  speechSynthesis.speak(u);
+  // Fully defensive: some mobile browsers expose a broken speechSynthesis
+  // that throws, and iOS silently pauses the queue — never let that leak.
+  try {
+    if (!('speechSynthesis' in window)) return;
+    speechSynthesis.resume();
+    if (speechSynthesis.pending) return;
+    const u = new SpeechSynthesisUtterance(word);
+    u.rate = 1.7;
+    u.pitch = 1.1;
+    u.volume = 1;
+    speechSynthesis.speak(u);
+  } catch (err) { /* voice is best-effort */ }
+}
+
+// Mobile speech synthesis usually needs its first utterance to come from a
+// user gesture. Called from the PLAY/PRACTICE tap to unlock the voice.
+function primeSpeech() {
+  try {
+    if (!('speechSynthesis' in window)) return;
+    speechSynthesis.cancel();
+    speechSynthesis.resume();
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    speechSynthesis.speak(u);
+  } catch (err) {}
 }
 
 // Metronome "tsu": a muted stick-knock — a small mid-range thump plus a soft
@@ -908,6 +927,7 @@ function flashDrum(type) {
 
 function startGame(practice) {
   ensureAudio();
+  if (voiceOn) primeSpeech();
   practiceMode = !!practice;
   $('quitbtn').classList.toggle('hidden', !practiceMode);
   running = true;
@@ -942,7 +962,6 @@ function schedulerTick() {
   if (now + 0.25 < pendingMeasure.start) return;
 
   const m = pendingMeasure;
-  const bi = 60 / currentBpm();
 
   // Keep the cancel list from growing without bound on long runs.
   if (scheduledNodes.length > 300) scheduledNodes.splice(0, 200);
@@ -950,6 +969,7 @@ function schedulerTick() {
   if (m.kind === 'call') {
     // A tempo step gets a rest measure first: ticks at the NEW speed and a
     // "TEMPO UP!" banner, so the player can settle in before the next call.
+    // This is the ONLY point where the game's tempo is allowed to change.
     const bpmNow = currentBpm();
     if (bpmNow !== lastScheduledBpm) {
       lastScheduledBpm = bpmNow;
@@ -960,6 +980,7 @@ function schedulerTick() {
       pendingMeasure = { kind: 'call', start: breakMeasure.end };
       return;
     }
+    const bi = 60 / bpmNow;
     const pattern = makePattern(phraseLen, phrasesCleared);
     currentPattern = pattern;
     // Audio is scheduled now, but the viz swaps in at the measure start (frame()),
@@ -969,7 +990,11 @@ function schedulerTick() {
     pattern.forEach(e => playHit(e.type, m.start + e.beat * bi));
     pendingMeasure = { kind: 'response', start: m.start + phraseLen * bi, beatInterval: bi };
   } else {
-    // Response measure: metronome only (if enabled); the player supplies the drums.
+    // Response measure: metronome only (if enabled); the player supplies the
+    // drums. It MUST inherit the call's beat interval — recomputing from the
+    // current BPM here would let a mid-phrase score bump speed up the
+    // response before any "TEMPO UP!" break was shown.
+    const bi = m.beatInterval;
     if (metroOn) for (let b = 0; b < phraseLen; b++) playTick(m.start + b * bi, b === 0);
     // Fine divisions cap the window so it can't reach a neighboring slot.
     const w = Math.min(FORGIVENESS, 0.95 / subdivSlots()) * bi;
@@ -991,8 +1016,20 @@ function schedulerTick() {
 }
 
 // Per-frame: playhead, call-playback flashes, miss detection, phrase completion.
+// The next frame is requested FIRST and the work is wrapped in try/catch, so a
+// throw from any one step (e.g. a flaky speech API) can never kill the visual
+// loop while the audio scheduler plays on.
 function frame() {
   if (!running) return;
+  rafId = requestAnimationFrame(frame);
+  try {
+    frameStep();
+  } catch (err) {
+    console.error('frame error:', err);
+  }
+}
+
+function frameStep() {
   const now = audio.currentTime;
 
   const inResponse = response && now >= response.start && now < response.end;
@@ -1047,8 +1084,6 @@ function frame() {
       response = null;
     }
   }
-
-  rafId = requestAnimationFrame(frame);
 }
 
 /* ================= Input & judging ================= */
