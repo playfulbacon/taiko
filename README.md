@@ -14,6 +14,9 @@ wrong drum or side, or add an extra hit and the game ends. **Each phrase you
 clear scores its difficulty in points** (1–5), with the stars flying into
 the score.
 
+- **On a keyboard**, the home row mirrors the drum: <kbd>F</kbd> left rim,
+  <kbd>G</kbd> left bass, <kbd>H</kbd> right bass, <kbd>J</kbd> right rim.
+  The key hints appear on screen only on devices with a mouse.
 - **Beat visualization** across the top shows the pattern and a moving playhead
   (long phrases wrap into rows of 8); your correct hits light up green.
 - **Score** is the big number in the middle of the screen.

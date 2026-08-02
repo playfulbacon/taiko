@@ -236,6 +236,21 @@
   #halfL { left: 0; border-right: 1px dashed #ffffff33; }
   #halfR { right: 0; }
   .dhalf.flash { background: radial-gradient(circle at 50% 50%, #ffb0b0, #ff5a5acc 80%); color: #fff; }
+  /* Keyboard hints: only meaningful where there's a real keyboard. */
+  .key, .keyshint { display: none; }
+  @media (hover: hover) and (pointer: fine) {
+    .key {
+      display: block;
+      margin-top: 4px;
+      font-style: normal;
+      font-size: 11px;
+      letter-spacing: 0;
+      opacity: 0.75;
+    }
+    .dhalf { flex-direction: column; }
+    .keyshint { display: inline; }
+    .keyshint b { color: #ddd; background: #23232e; padding: 1px 6px; border-radius: 5px; }
+  }
   .rimglow {
     position: absolute;
     top: 0; bottom: 0;
@@ -481,13 +496,16 @@
     <div id="status"></div>
   </div>
   <div id="drumzone">
-    <div id="rimhint"><span>RA</span><span>KA</span></div>
+    <div id="rimhint">
+      <span>RA<i class="key">F</i></span>
+      <span>KA<i class="key">J</i></span>
+    </div>
     <div id="rimL" class="rimglow"></div>
     <div id="rimR" class="rimglow"></div>
     <div id="drumshell">
       <div id="drum">
-        <div id="halfL" class="dhalf">KO</div>
-        <div id="halfR" class="dhalf">DON</div>
+        <div id="halfL" class="dhalf">KO<i class="key">G</i></div>
+        <div id="halfR" class="dhalf">DON<i class="key">H</i></div>
       </div>
       <div id="ringL" class="ring"></div>
       <div id="ringR" class="ring"></div>
@@ -503,6 +521,7 @@
     Tap <b class="don">inside the drum</b> for don &bull;
     tap <b class="ka">outside</b> for rim.<br>
     Left and right count — a note's <b>lit half</b> shows which hand.<br>
+    <span class="keyshint">On a keyboard: <b>F</b> <b>G</b> <b>H</b> <b>J</b> &mdash; rim, bass, bass, rim.<br></span>
     One miss and it's over!
   </div>
   <button id="optionsbtn" class="togglebtn">OPTIONS &#9662;</button>
@@ -589,7 +608,7 @@
 /* ================= Tunables ================= */
 
 // Bumped on every update so the title screen shows which build is live.
-const APP_VERSION = 16;
+const APP_VERSION = 17;
 
 // Forgiveness: how far off a tap may be from the true beat and still count,
 // as a fraction of one beat on EACH side. 0.45 means nearly half a beat of
@@ -1298,6 +1317,15 @@ function frameStep() {
 
 /* ================= Input & judging ================= */
 
+// Every hit — tap or keypress — funnels through here.
+function hit(type) {
+  const t = audio.currentTime;
+  playHit(type, t);
+  flashDrum(type);
+  if (navigator.vibrate) navigator.vibrate(famOf(type) === 'don' ? 15 : 8);
+  judge(type, t);
+}
+
 appEl.addEventListener('pointerdown', ev => {
   if (!running) return;
   ev.preventDefault();
@@ -1306,13 +1334,22 @@ appEl.addEventListener('pointerdown', ev => {
   const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
   const dist = Math.hypot(ev.clientX - cx, ev.clientY - cy);
   const side = ev.clientX < cx ? 'L' : 'R';
-  const type = (dist <= r.width / 2 ? 'don' : 'ka') + side;
+  hit((dist <= r.width / 2 ? 'don' : 'ka') + side);
+});
 
-  const t = audio.currentTime;
-  playHit(type, t);
-  flashDrum(type);
-  if (navigator.vibrate) navigator.vibrate(famOf(type) === 'don' ? 15 : 8);
-  judge(type, t);
+// Keyboard: F G H J across the home row mirrors the drum — outer keys are
+// the rims, inner keys the drum face, left keys left-handed.
+const KEY_MAP = { f: 'kaL', g: 'donL', h: 'donR', j: 'kaR' };
+
+window.addEventListener('keydown', ev => {
+  if (ev.repeat || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  if (ev.target && /^(INPUT|TEXTAREA)$/.test(ev.target.tagName)) return;
+  const type = KEY_MAP[ev.key.toLowerCase()];
+  if (!type) return;
+  ev.preventDefault();
+  if (!running) return;
+  ensureAudio();
+  hit(type);
 });
 
 function judge(type, t) {
