@@ -672,56 +672,94 @@ function playHit(type, t) {
   (famOf(type) === 'don' ? playDon : playKa)(t, sideOf(type));
 }
 
-/* Kuchi-shoga voice: speak the syllable of each hit as the call plays.
-   Speech synthesis has real startup latency, so each syllable is fired
-   EARLY by an estimated lead. The lead self-tunes: utterance onstart
-   events measure the device's actual latency and feed a running average
-   (persisted, so later sessions start aligned). If the voice still falls
-   behind on dense phrases, extra syllables are dropped rather than queued. */
-const SYLLABLE = { donR: 'don', donL: 'ko', kaR: 'kah', kaL: 'rah' };
-let speechLead = parseFloat(localStorage.getItem('taikosays_voicelag')) || 150;
-let speechTimers = [];
+/* ---- Synthesized kuchi-shoga voice ----
+   Formant synthesis, no TTS: a sawtooth "glottal" source runs through
+   parallel bandpass filters shaped per vowel; consonants are plosive noise
+   bursts plus fast formant glides, and "don" gets a nasal /n/ tail. Because
+   it's plain WebAudio, syllables schedule sample-accurately with the drums.
+   Dense phrases compress syllable length to the gap before the next note. */
+const SYLLABLE = { donR: 'don', donL: 'ko', kaR: 'ka', kaL: 'ra' };
 
-function speak(word) {
-  // Fully defensive: some mobile browsers expose a broken speechSynthesis
-  // that throws, and iOS silently pauses the queue — never let that leak.
-  try {
-    if (!('speechSynthesis' in window)) return;
-    speechSynthesis.resume();
-    if (speechSynthesis.pending) return;
-    const u = new SpeechSynthesisUtterance(word);
-    u.rate = 1.7;
-    u.pitch = 1.1;
-    u.volume = 1;
-    const t0 = performance.now();
-    u.onstart = () => {
-      const lag = performance.now() - t0;
-      speechLead = Math.min(350, Math.max(0, speechLead * 0.7 + lag * 0.3));
-      localStorage.setItem('taikosays_voicelag', Math.round(speechLead));
-    };
-    speechSynthesis.speak(u);
-  } catch (err) { /* voice is best-effort */ }
-}
+const VOWELS = {  // [center Hz, gain, Q] per formant band
+  o: [[430, 1.0, 10], [850, 0.5, 10], [2500, 0.15, 12]],
+  a: [[750, 1.0, 9], [1200, 0.6, 10], [2600, 0.15, 12]],
+};
 
-// Queue a syllable to be SPOKEN so its sound lands at audio time t.
-function scheduleSpeech(word, t) {
-  const delay = (t - audio.currentTime) * 1000 - speechLead;
-  speechTimers.push(setTimeout(() => {
-    if (running && voiceOn) speak(word);
-  }, Math.max(0, delay)));
-}
+const VOICES = {
+  don: { onset: 'd', vowel: 'o', nasal: true,  f0: [140, 104], dur: 0.22 },
+  ko:  { onset: 'k', vowel: 'o', nasal: false, f0: [152, 116], dur: 0.16 },
+  ka:  { onset: 'k', vowel: 'a', nasal: false, f0: [150, 112], dur: 0.17 },
+  ra:  { onset: 'r', vowel: 'a', nasal: false, f0: [146, 110], dur: 0.16 },
+};
 
-// Mobile speech synthesis usually needs its first utterance to come from a
-// user gesture. Called from the PLAY/PRACTICE tap to unlock the voice.
-function primeSpeech() {
-  try {
-    if (!('speechSynthesis' in window)) return;
-    speechSynthesis.cancel();
-    speechSynthesis.resume();
-    const u = new SpeechSynthesisUtterance(' ');
-    u.volume = 0;
-    speechSynthesis.speak(u);
-  } catch (err) {}
+function playVoice(word, t, maxDur) {
+  const spec = VOICES[word];
+  if (!spec) return;
+  const k = Math.max(0.55, Math.min(1, (maxDur * 0.92) / spec.dur));
+  const dur = spec.dur * k;
+  const tEnd = t + dur;
+  const nStart = t + (dur - 0.08 * k);   // nasal tail start (don only)
+  // Unvoiced k-burst sits before voicing; d and r voice almost immediately.
+  const vStart = t + (spec.onset === 'k' ? 0.045 * k : 0.012);
+
+  const out = audio.createGain();
+  out.gain.setValueAtTime(0, vStart);
+  out.gain.linearRampToValueAtTime(0.32, vStart + 0.02);
+  if (spec.nasal) {
+    out.gain.setValueAtTime(0.32, nStart);
+    out.gain.linearRampToValueAtTime(0.14, nStart + 0.02);
+  }
+  out.gain.exponentialRampToValueAtTime(0.001, tEnd);
+  out.connect(audio.destination);
+
+  const osc = track(audio.createOscillator());
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(spec.f0[0], vStart);
+  osc.frequency.exponentialRampToValueAtTime(spec.f0[1], tEnd);
+
+  VOWELS[spec.vowel].forEach(([freq, g, q], i) => {
+    const bp = audio.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = q;
+    const fg = audio.createGain();
+    fg.gain.value = g;
+    // Consonant-to-vowel formant glides.
+    let from = freq;
+    if (i === 0 && spec.onset !== 'k') from = 260;
+    if (i === 1) from = spec.onset === 'd' ? 1650 : spec.onset === 'k' ? 1300 : 1350;
+    bp.frequency.setValueAtTime(from, vStart);
+    bp.frequency.exponentialRampToValueAtTime(freq, vStart + (spec.onset === 'r' ? 0.03 : 0.05));
+    if (spec.nasal && i === 0) {
+      bp.frequency.setValueAtTime(freq, nStart);
+      bp.frequency.exponentialRampToValueAtTime(280, nStart + 0.03);
+    }
+    if (spec.nasal && i > 0) {
+      fg.gain.setValueAtTime(g, nStart);
+      fg.gain.linearRampToValueAtTime(g * 0.15, nStart + 0.03);
+    }
+    osc.connect(bp).connect(fg).connect(out);
+  });
+  osc.start(t);
+  osc.stop(tEnd + 0.02);
+
+  // Plosive burst: aspirated for k, a soft high click for d.
+  if (spec.onset === 'k' || spec.onset === 'd') {
+    const len = spec.onset === 'k' ? 0.03 : 0.012;
+    const buf = audio.createBuffer(1, Math.ceil(audio.sampleRate * len), audio.sampleRate);
+    const dch = buf.getChannelData(0);
+    for (let i = 0; i < dch.length; i++) dch[i] = (Math.random() * 2 - 1) * (1 - i / dch.length);
+    const src = track(audio.createBufferSource());
+    src.buffer = buf;
+    const bp = audio.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = spec.onset === 'k' ? 1500 : 3200;
+    bp.Q.value = 1.5;
+    const g = audio.createGain();
+    g.gain.setValueAtTime(spec.onset === 'k' ? 0.16 : 0.07, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + len);
+    src.connect(bp).connect(g).connect(audio.destination);
+    src.start(t); src.stop(t + len);
+  }
 }
 
 // Metronome "tsu": a muted stick-knock — a small mid-range thump plus a soft
@@ -945,7 +983,6 @@ function flashDrum(type) {
 
 function startGame(practice) {
   ensureAudio();
-  if (voiceOn) primeSpeech();
   practiceMode = !!practice;
   $('quitbtn').classList.toggle('hidden', !practiceMode);
   running = true;
@@ -1005,10 +1042,13 @@ function schedulerTick() {
     // so the previous phrase stays on screen while the player finishes it.
     callMeasure = { start: m.start, beatInterval: bi, pattern, diff: lastPatternDiff, rendered: false };
     if (metroOn) for (let b = 0; b < phraseLen; b++) playTick(m.start + b * bi, b === 0);
-    pattern.forEach(e => {
+    pattern.forEach((e, i) => {
       const t = m.start + e.beat * bi;
       playHit(e.type, t);
-      if (voiceOn) scheduleSpeech(SYLLABLE[e.type], t);
+      if (voiceOn) {
+        const nextBeat = i + 1 < pattern.length ? pattern[i + 1].beat : e.beat + 1;
+        playVoice(SYLLABLE[e.type], t, (nextBeat - e.beat) * bi);
+      }
     });
     pendingMeasure = { kind: 'response', start: m.start + phraseLen * bi, beatInterval: bi };
   } else {
@@ -1223,9 +1263,6 @@ function stopEverything() {
   callMeasure = null;
   pendingMeasure = null;
   breakMeasure = null;
-  speechTimers.forEach(clearTimeout);
-  speechTimers = [];
-  if ('speechSynthesis' in window) speechSynthesis.cancel();
   highlightBeat(-1);
   setPhase('');
   statusEl.textContent = '';
@@ -1320,7 +1357,6 @@ voicebtn.addEventListener('click', () => {
   voiceOn = !voiceOn;
   localStorage.setItem('taikosays_voice', voiceOn ? '1' : '0');
   renderVoiceBtn();
-  if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel();
 });
 renderVoiceBtn();
 
@@ -1346,7 +1382,15 @@ function previewPhrase(ph) {
   ensureAudio();
   const bi = 60 / startBpm;
   const t0 = audio.currentTime + 0.1;
-  parsePhrase(ph.p).forEach(e => playHit(e.type, t0 + e.beat * bi));
+  const evs = parsePhrase(ph.p);
+  evs.forEach((e, i) => {
+    const t = t0 + e.beat * bi;
+    playHit(e.type, t);
+    if (voiceOn) {
+      const nextBeat = i + 1 < evs.length ? evs[i + 1].beat : e.beat + 1;
+      playVoice(SYLLABLE[e.type], t, (nextBeat - e.beat) * bi);
+    }
+  });
 }
 
 const DIVISION_NAMES = { 1: '4ths', 2: '8ths', 4: '16ths' };
