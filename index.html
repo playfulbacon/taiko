@@ -424,6 +424,42 @@
   .diffbtn.selected { border-color: #ffd23f; color: #ffd23f; background: #2b2b38; }
 
   #gameover h2 { font-size: 26px; color: #ff5a5a; }
+  #namesection { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #namerow { display: flex; gap: 8px; }
+  #nameinput {
+    width: 180px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 2px solid #3a3a48;
+    background: #23232e;
+    color: #eee;
+    font-size: 16px;
+    text-align: center;
+  }
+  #nameinput:focus { outline: none; border-color: #4fc3f7; }
+  #randomname {
+    width: 50px;
+    border-radius: 12px;
+    border: 2px solid #3a3a48;
+    background: #23232e;
+    font-size: 20px;
+  }
+  #namechips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    max-width: 320px;
+  }
+  .namechip {
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid #3a3a48;
+    background: #23232e;
+    color: #ccc;
+    font-size: 14px;
+  }
+  .hsname { color: #888; font-size: 14px; margin-left: 8px; }
   #finalscore { font-size: 96px; font-weight: 800; line-height: 1; }
   #gameoverdetail { color: #999; font-size: 16px; }
   #newbest { color: #ffd23f; font-weight: 700; font-size: 18px; min-height: 24px; }
@@ -531,8 +567,16 @@
   <h2>Game Over</h2>
   <div id="gameoverdetail"></div>
   <div id="finalscore">0</div>
-  <div class="subtitle">rhythms repeated</div>
+  <div class="subtitle">points</div>
   <div id="newbest"></div>
+  <div id="namesection">
+    <div class="lenlabel">Your name</div>
+    <div id="namerow">
+      <input id="nameinput" maxlength="12" placeholder="Player" autocomplete="off">
+      <button id="randomname" title="Random name">&#127922;</button>
+    </div>
+    <div id="namechips"></div>
+  </div>
   <button id="continuebtn" class="bigbtn">CONTINUE</button>
   </div>
 </div>
@@ -543,7 +587,7 @@
 /* ================= Tunables ================= */
 
 // Bumped on every update so the title screen shows which build is live.
-const APP_VERSION = 13;
+const APP_VERSION = 14;
 
 // Forgiveness: how far off a tap may be from the true beat and still count,
 // as a fraction of one beat on EACH side. 0.45 means nearly half a beat of
@@ -1331,17 +1375,53 @@ function loadScores() {
   catch { return {}; }
 }
 
-// Records the score and returns true if it beat the previous best for this length.
-function saveScore(len, s) {
-  if (s <= 0) return false;
+// Score entries are {s, name}; plain numbers from older builds normalize.
+function normScore(e) { return typeof e === 'number' ? { s: e, name: '' } : e; }
+
+function bestScore(len) {
+  const list = (loadScores()[len] || []).map(normScore);
+  return list.length ? list[0].s : 0;
+}
+
+function saveScore(len, s, name) {
+  if (s <= 0) return;
   const all = loadScores();
-  const list = all[len] || [];
-  const prevBest = list[0] || 0;
-  list.push(s);
-  list.sort((a, b) => b - a);
+  const list = (all[len] || []).map(normScore);
+  list.push({ s, name });
+  list.sort((a, b) => b.s - a.s);
   all[len] = list.slice(0, 5);
   localStorage.setItem('taikosays_scores', JSON.stringify(all));
-  return s > prevBest;
+}
+
+/* ---- Player names ---- */
+
+function loadNames() {
+  try { return JSON.parse(localStorage.getItem('taikosays_names') || '[]'); }
+  catch { return []; }
+}
+
+function saveName(n) {
+  const list = [n, ...loadNames().filter(x => x !== n)].slice(0, 8);
+  localStorage.setItem('taikosays_names', JSON.stringify(list));
+}
+
+const NAME_A = ['Don', 'Doko', 'Kara', 'Taiko', 'Bachi', 'Matsuri', 'Oni', 'Tsuzumi', 'Kaminari', 'Sakura'];
+const NAME_B = ['Taro', 'Hana', 'Zilla', 'Master', 'Kid', 'Star', 'Sora', 'Yuki', 'Fox', 'Hero'];
+function randomName() {
+  return NAME_A[Math.floor(Math.random() * NAME_A.length)] +
+         NAME_B[Math.floor(Math.random() * NAME_B.length)];
+}
+
+function renderNameChips() {
+  const wrap = $('namechips');
+  wrap.innerHTML = '';
+  loadNames().forEach(n => {
+    const chip = document.createElement('button');
+    chip.className = 'namechip';
+    chip.textContent = n;
+    chip.addEventListener('click', () => { $('nameinput').value = n; });
+    wrap.appendChild(chip);
+  });
 }
 
 // A miss ends the game — except in practice mode, where the phrase is simply
@@ -1383,10 +1463,14 @@ function stopEverything() {
 function gameOver(reason) {
   stopEverything();
   playFailSound();
-  const isBest = saveScore(phraseLen, score);
+  // The score is saved on CONTINUE, once the player has picked a name.
+  const isBest = score > 0 && score > bestScore(phraseLen);
   $('gameoverdetail').textContent = reason + '!';
   $('finalscore').textContent = score;
-  $('newbest').textContent = isBest && score > 0 ? '★ New high score! ★' : '';
+  $('newbest').textContent = isBest ? '★ New high score! ★' : '';
+  $('namesection').style.display = score > 0 ? '' : 'none';
+  $('nameinput').value = loadNames()[0] || '';
+  renderNameChips();
   setTimeout(() => $('gameover').classList.remove('hidden'), 500);
 }
 
@@ -1399,7 +1483,7 @@ function quitToTitle() {
 /* ================= Title screen ================= */
 
 function renderHighScores() {
-  const list = (loadScores()[phraseLen] || []);
+  const list = (loadScores()[phraseLen] || []).map(normScore);
   const el = $('hslist');
   el.innerHTML = '';
   if (list.length === 0) {
@@ -1407,9 +1491,19 @@ function renderHighScores() {
     return;
   }
   const medals = ['\u{1F947}', '\u{1F948}', '\u{1F949}', '•', '•'];
-  list.forEach((s, i) => {
+  list.forEach((e, i) => {
     const li = document.createElement('li');
-    li.innerHTML = '<span class="medal">' + medals[i] + '</span>' + s;
+    const medal = document.createElement('span');
+    medal.className = 'medal';
+    medal.textContent = medals[i];
+    li.appendChild(medal);
+    li.appendChild(document.createTextNode(e.s));
+    if (e.name) {
+      const nm = document.createElement('span');
+      nm.className = 'hsname';
+      nm.textContent = e.name;
+      li.appendChild(nm);
+    }
     el.appendChild(li);
   });
 }
@@ -1570,9 +1664,18 @@ $('devreset').addEventListener('click', () => {
 });
 
 $('continuebtn').addEventListener('click', () => {
+  if (score > 0) {
+    const name = ($('nameinput').value.trim() || 'Player').slice(0, 12);
+    saveName(name);
+    saveScore(phraseLen, score, name);
+  }
   $('gameover').classList.add('hidden');
   renderHighScores();
   $('title').classList.remove('hidden');
+});
+
+$('randomname').addEventListener('click', () => {
+  $('nameinput').value = randomName();
 });
 
 renderHighScores();
