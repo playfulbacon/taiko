@@ -589,7 +589,7 @@
 /* ================= Tunables ================= */
 
 // Bumped on every update so the title screen shows which build is live.
-const APP_VERSION = 15;
+const APP_VERSION = 16;
 
 // Forgiveness: how far off a tap may be from the true beat and still count,
 // as a fraction of one beat on EACH side. 0.45 means nearly half a beat of
@@ -597,9 +597,9 @@ const APP_VERSION = 15;
 const FORGIVENESS = 0.45;
 
 // Timing judgment tiers, as fractions of the full forgiveness window.
-// A hit within 30% of the window is PERFECT, within 65% GOOD, else OK.
+// A hit within 15% of the window is PERFECT, within 65% GOOD, else OK.
 const JUDGE = [
-  { name: 'PERFECT', frac: 0.30, color: '#ffd23f', cls: 'j-perfect' },
+  { name: 'PERFECT', frac: 0.15, color: '#ffd23f', cls: 'j-perfect' },
   { name: 'GOOD',    frac: 0.65, color: '#4cd964', cls: 'j-good' },
   { name: 'OK',      frac: 1.00, color: '#9aa8b8', cls: 'j-ok' },
 ];
