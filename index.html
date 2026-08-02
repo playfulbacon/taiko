@@ -673,10 +673,14 @@ function playHit(type, t) {
 }
 
 /* Kuchi-shoga voice: speak the syllable of each hit as the call plays.
-   Speech synthesis can't be scheduled sample-accurately, so syllables are
-   spoken as their notes light up; if the voice falls behind on dense
-   phrases, extra syllables are dropped rather than queued. */
+   Speech synthesis has real startup latency, so each syllable is fired
+   EARLY by an estimated lead. The lead self-tunes: utterance onstart
+   events measure the device's actual latency and feed a running average
+   (persisted, so later sessions start aligned). If the voice still falls
+   behind on dense phrases, extra syllables are dropped rather than queued. */
 const SYLLABLE = { donR: 'don', donL: 'ko', kaR: 'kah', kaL: 'rah' };
+let speechLead = parseFloat(localStorage.getItem('taikosays_voicelag')) || 150;
+let speechTimers = [];
 
 function speak(word) {
   // Fully defensive: some mobile browsers expose a broken speechSynthesis
@@ -689,8 +693,22 @@ function speak(word) {
     u.rate = 1.7;
     u.pitch = 1.1;
     u.volume = 1;
+    const t0 = performance.now();
+    u.onstart = () => {
+      const lag = performance.now() - t0;
+      speechLead = Math.min(350, Math.max(0, speechLead * 0.7 + lag * 0.3));
+      localStorage.setItem('taikosays_voicelag', Math.round(speechLead));
+    };
     speechSynthesis.speak(u);
   } catch (err) { /* voice is best-effort */ }
+}
+
+// Queue a syllable to be SPOKEN so its sound lands at audio time t.
+function scheduleSpeech(word, t) {
+  const delay = (t - audio.currentTime) * 1000 - speechLead;
+  speechTimers.push(setTimeout(() => {
+    if (running && voiceOn) speak(word);
+  }, Math.max(0, delay)));
 }
 
 // Mobile speech synthesis usually needs its first utterance to come from a
@@ -987,7 +1005,11 @@ function schedulerTick() {
     // so the previous phrase stays on screen while the player finishes it.
     callMeasure = { start: m.start, beatInterval: bi, pattern, diff: lastPatternDiff, rendered: false };
     if (metroOn) for (let b = 0; b < phraseLen; b++) playTick(m.start + b * bi, b === 0);
-    pattern.forEach(e => playHit(e.type, m.start + e.beat * bi));
+    pattern.forEach(e => {
+      const t = m.start + e.beat * bi;
+      playHit(e.type, t);
+      if (voiceOn) scheduleSpeech(SYLLABLE[e.type], t);
+    });
     pendingMeasure = { kind: 'response', start: m.start + phraseLen * bi, beatInterval: bi };
   } else {
     // Response measure: metronome only (if enabled); the player supplies the
@@ -1063,7 +1085,6 @@ function frameStep() {
       if (e.el && !e.el.classList.contains('played') && now >= callMeasure.start + e.beat * callMeasure.beatInterval) {
         e.el.classList.add('played');
         flashDrum(e.type);
-        if (voiceOn) speak(SYLLABLE[e.type]);
       }
     });
   } else if (inResponse) {
@@ -1202,6 +1223,8 @@ function stopEverything() {
   callMeasure = null;
   pendingMeasure = null;
   breakMeasure = null;
+  speechTimers.forEach(clearTimeout);
+  speechTimers = [];
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   highlightBeat(-1);
   setPhase('');
