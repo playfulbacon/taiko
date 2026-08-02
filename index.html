@@ -81,8 +81,10 @@
     transition: border-color 0.08s, background 0.08s;
   }
   .cell.playhead { border-color: #ffd23f; background: #2b2b38; }
-  .cell.goodcell { border-color: #4cd964; }
-  .cell.playhead.goodcell { border-color: #4cd964; }
+  /* Timing-tier colors on the cell of a landed hit (win over .playhead). */
+  .cell.j-perfect { border-color: #ffd23f; }
+  .cell.j-good { border-color: #4cd964; }
+  .cell.j-ok { border-color: #9aa8b8; }
   /* Each cell is a mini-timeline: one slot per subdivision, empty slots show a tick. */
   .slot {
     flex: 1;
@@ -159,6 +161,22 @@
     align-items: center;
     justify-content: center;
   }
+  #judgment {
+    position: absolute;
+    top: 2px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    opacity: 0;
+    transform: scale(0.8);
+    transition: opacity 0.14s, transform 0.14s;
+    pointer-events: none;
+    z-index: 2;
+  }
+  #judgment.pop { opacity: 1; transform: scale(1.12); }
   #rimhint {
     position: absolute;
     inset: 0;
@@ -424,6 +442,7 @@
     <div id="status"></div>
   </div>
   <div id="drumzone">
+    <div id="judgment"></div>
     <div id="rimhint"><span>RA</span><span>KA</span></div>
     <div id="rimL" class="rimglow"></div>
     <div id="rimR" class="rimglow"></div>
@@ -524,12 +543,21 @@
 /* ================= Tunables ================= */
 
 // Bumped on every update so the title screen shows which build is live.
-const APP_VERSION = 12;
+const APP_VERSION = 13;
 
 // Forgiveness: how far off a tap may be from the true beat and still count,
 // as a fraction of one beat on EACH side. 0.45 means nearly half a beat of
 // slop either way. Lower = stricter.
 const FORGIVENESS = 0.45;
+
+// Timing judgment tiers, as fractions of the full forgiveness window.
+// A hit within 30% of the window is PERFECT, within 65% GOOD, else OK.
+const JUDGE = [
+  { name: 'PERFECT', frac: 0.30, color: '#ffd23f', cls: 'j-perfect' },
+  { name: 'GOOD',    frac: 0.65, color: '#4cd964', cls: 'j-good' },
+  { name: 'OK',      frac: 1.00, color: '#9aa8b8', cls: 'j-ok' },
+];
+const MISS_COLOR = '#ff5a5a';
 
 const BPM_STEP = 6;         // tempo increase at each step up
 const TEMPO_EVERY = 3;      // tempo steps up every this many cleared phrases
@@ -999,6 +1027,19 @@ function highlightBeat(idx) {
   cellEls.forEach((c, i) => c.classList.toggle('playhead', i === idx));
 }
 
+// Per-hit timing feedback popped up over the drum.
+let judgeTimer = null;
+function showJudgment(text, color) {
+  const el = $('judgment');
+  el.textContent = text;
+  el.style.color = color;
+  el.classList.remove('pop');
+  void el.offsetWidth;
+  el.classList.add('pop');
+  clearTimeout(judgeTimer);
+  judgeTimer = setTimeout(() => el.classList.remove('pop'), 480);
+}
+
 // Stars fly from the difficulty line into the score when a phrase is cleared.
 function flyStars(n) {
   const from = diffEl.getBoundingClientRect();
@@ -1062,6 +1103,8 @@ function startGame(practice) {
   cellsEl.innerHTML = '';
   cellEls = [];
   diffEl.textContent = '';
+  clearTimeout(judgeTimer);
+  $('judgment').classList.remove('pop');
 
   const bi = 60 / currentBpm();
   const start = audio.currentTime + 0.3;
@@ -1251,10 +1294,12 @@ function judge(type, t) {
   }
   if (best) {
     best.matched = true;
+    const tier = JUDGE.find(j => bestDist <= response.w * j.frac) || JUDGE[JUDGE.length - 1];
+    showJudgment(tier.name, tier.color);
     if (best.el) {
       best.el.classList.add('hit');
       const cell = best.el.closest('.cell');
-      if (cell) cell.classList.add('goodcell');
+      if (cell) cell.classList.add(tier.cls);
     }
     // Final hit landed: the phrase is cleared. Score by its difficulty, with
     // that many stars flying from the difficulty line into the score.
@@ -1302,6 +1347,7 @@ function saveScore(len, s) {
 // A miss ends the game — except in practice mode, where the phrase is simply
 // forfeited and play rolls on to the next call.
 function handleMiss(reason) {
+  showJudgment('MISS', MISS_COLOR);
   if (practiceMode) {
     response = null;
     playSoftFail();
